@@ -19,6 +19,8 @@
 #define WIDTH_CELL                  55.0f   //  TODO    Разная ширина клетки
 #define WIDTH_PAWN                  42.0f   //  TODO    Разная ширина пешки
 
+// TODO сделать , не тут, логическую проверку, чтоб пешка была меньше поля игровой доски
+
 extern HGE* hge;
 extern hgeFont* fnt;
 
@@ -36,14 +38,17 @@ using pawns_t = std::vector<Pawn>;
 
 struct PointF { 
     PointF(float _x = 0.0f, float _y = 0.0f): x(_x), y(_y){}
-    float x;
-    float y;
+    float x, y;
+};
+
+struct Point {
+    Point(int _x = 0, int _y = 0) : x(_x), y(_y) {}
+    int x, y;
 };
 
 struct PointAB {
     PointAB(int _a = 0, int _b = 0) : a(_a), b(_b) {}
-    int a;
-    int b;
+    int a, b;
 };
 
 /*Ячейка, имеет порядковый номер и координаты в декартовой системе*/
@@ -78,18 +83,15 @@ struct Pawn : public Cell {
     hgeSprite* spr_pawn;
 };
 
-/*Пешки*/
+/*Пешки игрока/AI */
 struct PawnsPlayer {
-    enum LOC_INIT { LOC_INIT_LEFT_TOP, LOC_INIT_RIGHT_BOTTOM };
-    std::vector<LOC_INIT> loc_init_vec;                                 // TODO Сделать статик
     const size_t& count_items;
     pawns_t pawns;
+    const std::vector<size_t> *pawn_place;
 
-    void init_left_top() {
-        for (size_t i = 0; i < COUNT_PAWNS_ROW_INIT; i++) {
-            for (size_t j = 0; j < COUNT_PAWNS_ROW_INIT; j++) {
-                pawns.push_back(Pawn(i, j, i * COUNT_CELLS_ROW + j));
-            }
+    void init_loc_pawn(const std::vector<size_t>* mapZonePlayer, const size_t width_board) {
+        for (size_t i = 0; i < mapZonePlayer->size(); i++) {
+            pawns.push_back(Pawn(mapZonePlayer->at(i) / width_board, mapZonePlayer->at(i) % width_board, mapZonePlayer->at(i)));
         }
     }
 
@@ -100,28 +102,12 @@ struct PawnsPlayer {
             }
         }
     }
-    void init(LOC_INIT loc) {
-        std::for_each(loc_init_vec.begin(), loc_init_vec.end(), [&loc](const LOC_INIT l) {      //TODO Переделать на обычный цикл, чтоб избавиться от enum unscoped
-            if (l == loc) throw std::logic_error("this pawns alreasy exists");
-        });
-        switch (loc)
-        {
-        case PawnsPlayer::LOC_INIT_LEFT_TOP:
-            loc_init_vec.push_back(loc);
-            init_left_top();
-            break;
-        case PawnsPlayer::LOC_INIT_RIGHT_BOTTOM:
-            loc_init_vec.push_back(loc);
-            init_right_bottom();
-            break;
-        default:
-            break;
-        }
-    }
-    PawnsPlayer(const size_t _count_items) :count_items(_count_items) {
-        pawns.reserve(count_items);
-    }
 
+    PawnsPlayer(const Point &point_left_top_corner, const size_t width_board, const std::vector<size_t>* player_place) : count_items(player_place->size()) {
+        pawn_place = player_place;
+        pawns.reserve(count_items);
+        init_loc_pawn(player_place, width_board);
+    }
 };
 
 //class Player {
@@ -224,28 +210,38 @@ public:
     Message message;
     Board *board;
     Barrier barrier;
-
     std::vector<PawnsPlayer*> players_pawns;
 
-    GameModel() {
-        board = new Board(COUNT_CELLS_ROW);
+    GameModel(const size_t width_side = COUNT_CELLS_ROW) {
+        board = new Board(width_side);
 
     };
 
-    PawnsPlayer* createPawns(const PawnsPlayer::LOC_INIT loc, const size_t count_pawns = COUNT_PAWNS_ONE_SIDE) {
-        PawnsPlayer* pawns = new PawnsPlayer(count_pawns);
-        try
-        {
-            pawns->init(loc);
+    /*Создать массив содержащий номера зоны игрока*/
+    std::vector<size_t>* createZonePlayer(Point pointLeftTopCorner, size_t width = 3, size_t height = 3) {
+        while (pointLeftTopCorner.x + width >= board->arr_squars.front().size()) {  // Если нестыковка и выходим за границу, то правим точку как можем
+            pointLeftTopCorner.x--;
         }
-        catch (const std::exception&)
-        {
-            delete pawns;
-            printString("error init pawns");
-            return nullptr;
+        while (pointLeftTopCorner.y + height >= board->arr_squars.size()) {         // Если нестыковка и выходим за границу, то правим точку как можем
+            pointLeftTopCorner.y--;
         }
-        players_pawns.push_back(pawns);
-        return pawns;
+        std::vector<size_t> *vec = new std::vector<size_t>;
+        for (size_t i = pointLeftTopCorner.y; i < pointLeftTopCorner.y + height; i++) {
+            for (size_t j = pointLeftTopCorner.x; j < pointLeftTopCorner.x + width; j++) {
+                vec->push_back(i * board->arr_squars.front().size() + j);
+            }
+        }
+        return vec;
+    }
+
+    /*Создать фигуры
+    left_top_corner - левая верхняя точка, начиная с которой будут расставляться фигуры
+    width - количество фигур в ряд
+    height - количество фигур в колонку*/
+    PawnsPlayer* createPawns(const Point &left_top_corner, const size_t width, const size_t height) {
+        PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, board->arr_squars.size(), createZonePlayer(left_top_corner, width, height));
+        players_pawns.push_back(player_pawns);
+        return player_pawns;
     }
 
     /*Расставить фигуры на доске*/
@@ -317,6 +313,7 @@ public:
         return PointAB();
     }
 
+    /*Установить размер спрайта для пешки*/
     void setSizePawn(const float& w, const float &h) {
         for(size_t p = 0; p < players_pawns.size(); p++)
             for (size_t i = 0; i < players_pawns[p]->pawns.size(); i++) {
@@ -342,10 +339,10 @@ private:
     // TODO На данный момент всё завязано статически, ищутся ячейки ближайшие к правому нижнему углу
     /*Получить номера ячеек к которым искать пути и положить их в вектор*/
     void getCellsToSearchPath(std::vector<int>& searchCells, size_t barrier_tolerance) {
-        for (int i = COUNT_CELLS_ROW - 1; i >= COUNT_CELLS_ROW - barrier_tolerance; i--) {
-            for (int j = COUNT_CELLS_ROW - 1; j >= COUNT_CELLS_ROW - barrier_tolerance; j--) {
+        for (int i = board->arr_squars.size() - 1; i >= board->arr_squars.size() - barrier_tolerance; i--) {
+            for (int j = board->arr_squars.size() - 1; j >= board->arr_squars.size() - barrier_tolerance; j--) {
                 if (!board->arr_squars[i][j]->filled)
-                    searchCells.push_back(i * COUNT_CELLS_ROW + j);
+                    searchCells.push_back(i * board->arr_squars.size() + j);
             }
         }
     }
@@ -420,34 +417,34 @@ private:
     }
 
     void getIndexs(const size_t numberCell, size_t& x, size_t& y) {
-        x = numberCell / COUNT_CELLS_ROW;
-        y = numberCell % COUNT_CELLS_ROW;
+        x = numberCell / board->arr_squars.size();
+        y = numberCell % board->arr_squars.size();
     }
 
     void calcVecEdge(const pawns_t &pawns, std::vector<Edge>& edge) {
-        for (int i = 0; i < COUNT_CELLS_ROW; i++) {
-            for (int j = 0; j < COUNT_CELLS_ROW; j++) {
+        for (int i = 0; i < board->arr_squars.size(); i++) {
+            for (int j = 0; j < board->arr_squars.size(); j++) {
                 Edge ed;
                 ed.cost = 1.0f;
-                ed.a = j + i * COUNT_CELLS_ROW;
+                ed.a = j + i * board->arr_squars.size();
                 if (j == 3)
                     std::cout << "";
                 if (getPawnPlaceOfNumber(ed.a, pawns))
                     continue;
                 if (j - 1 >= 0 && !board->arr_squars[i][j - 1]->filled) {
-                    ed.b = j - 1 + i * COUNT_CELLS_ROW;
+                    ed.b = j - 1 + i * board->arr_squars.size();
                     edge.push_back(ed);
                 }
-                if (j + 1 < COUNT_CELLS_ROW && !board->arr_squars[i][j + 1]->filled) {
-                    ed.b = i * COUNT_CELLS_ROW + j + 1;
+                if (j + 1 < board->arr_squars.size() && !board->arr_squars[i][j + 1]->filled) {
+                    ed.b = i * board->arr_squars.size() + j + 1;
                     edge.push_back(ed);
                 }
                 if (i - 1 >= 0 && !board->arr_squars[i - 1][j]->filled) {
-                    ed.b = (i - 1) * COUNT_CELLS_ROW + j;
+                    ed.b = (i - 1) * board->arr_squars.size() + j;
                     edge.push_back(ed);
                 }
-                if (i + 1 < COUNT_CELLS_ROW && !board->arr_squars[i + 1][j]->filled) {
-                    ed.b = (i + 1) * COUNT_CELLS_ROW + j;
+                if (i + 1 < board->arr_squars.size() && !board->arr_squars[i + 1][j]->filled) {
+                    ed.b = (i + 1) * board->arr_squars.size() + j;
                     edge.push_back(ed);
                 }
             }
@@ -455,12 +452,13 @@ private:
 
     }
 
+    /*Передвинуть пешку*/
     int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, pawns_t& pawns) {
         for (size_t i = 0; i < pawns.size(); i++) {
             if (pawns[i].x == index_x && pawns[i].y == index_y) {
                 pawns[i].x = to_x;
                 pawns[i].y = to_y;
-                pawns[i].n = to_x * COUNT_CELLS_ROW + to_y;
+                pawns[i].n = to_x * board->arr_squars.size() + to_y;
                 board->arr_squars[index_x][index_y]->filled = false;
                 board->arr_squars[to_x][to_y]->filled = true;
                 return i;
@@ -505,7 +503,6 @@ struct ViewPawns : public Observer {
     virtual void update() {
         const pawns_t& pawns = game->players_pawns.front()->pawns;
         const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
-        // TODO сделать , не тут, логическую проверку, чтоб пешка была меньше поля игровой доски
         const float dwBoarder = width_cell - pawns.front().spr_pawn->GetWidth();
         const float dhBoarder = width_cell - pawns.front().spr_pawn->GetHeight();
         for (int i = 0; i < pawns.size(); i++) {
@@ -566,8 +563,8 @@ class Controller
 public:
     Controller(GameModel* model_) : model(model_)
     {
-        player_pawns = model->createPawns(PawnsPlayer::LOC_INIT_LEFT_TOP);
-        model->arrangeFigures(player_pawns->pawns);
+        player_pawns = model->createPawns(Point(1, 1), 3, 3);   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
+        model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
         model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
     }
     void perform()

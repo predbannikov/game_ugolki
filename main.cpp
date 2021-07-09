@@ -93,9 +93,9 @@ void init_window() {
     fnt = new hgeFont("G:\\projects\\work\\voroneg\\kvakvs-hge-4f237b4\\tutorials\\precompiled\\font2.fnt");
     game = new GameModel;
     view = new ViewGame(game);
-    text = new ViewText(game);
     viewBoard = new ViewBoard(game);
     viewPawns = new ViewPawns(game);
+    text = new ViewText(game);
     cursor = new ViewCursor(game);      // курсор добавлять последним чтоб отрисовывался поверх 
     controller = new Controller(game);
     //doska = new Game(50);
