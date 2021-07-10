@@ -1,5 +1,6 @@
 #ifndef OBSERV_H
 #define OBSERV_H
+#include <vector>
 
 class Observer
 {

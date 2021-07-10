@@ -1,7 +1,8 @@
-#include "main.h"
 #include <stdio.h>
 #include <iostream>
-
+#include "view.h"
+#include "controller.h"
+#include "gamemodel.h"
 
 HGE* hge = nullptr;
 
@@ -18,7 +19,7 @@ ViewCellsTarget* veiwCellsTarget;
 ViewPointDebug* veiwPointDebug;
 hgeFont* fnt;
 
-Game_* doska;
+//Game_* doska;
 
 
 void init_window();
