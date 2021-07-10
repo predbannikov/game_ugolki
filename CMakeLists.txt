@@ -6,6 +6,8 @@ set( HGE_FONTEDIT_SRC
     main.cpp
     main.h)
 
+set(CMAKE_CXX_STANDARD 17)
+
 #------ additional includes ------
 include_directories( ${HGE_SOURCE_DIR}/include )
 include_directories( ${HGE_SOURCE_DIR}/src )

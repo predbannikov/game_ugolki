@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <stack>
 #include <thread>
 
 
@@ -21,6 +22,7 @@
 #define WIDTH_PAWN                  42.0f   //  TODO    Разная ширина пешки
 
 // TODO сделать , не тут, логическую проверку, чтоб пешка была меньше поля игровой доски
+// TODO никак не отслеживается что место игрока пересекает центр, что при отзеркаливании даёт пересечение мест размещений игроков
 
 extern HGE* hge;
 extern hgeFont* fnt;
@@ -42,14 +44,17 @@ using pawns_t = std::vector<Pawn>;
 /* Тип для хранения ячеек*/
 using cells_t = std::vector<Cell>;
 
-struct PointF { 
-    PointF(float _x = 0.0f, float _y = 0.0f): x(_x), y(_y){}
+struct PointF {
+    PointF(float _x = 0.0f, float _y = 0.0f) : x(_x), y(_y) {}
     float x, y;
 };
 
 struct Point {
     Point(int _x = 0, int _y = 0) : x(_x), y(_y) {}
     int x, y;
+    Point operator-(Point& p) {
+        return Point(this->x - p.x, this->y - p.y);
+    }
 };
 
 struct PointAB {
@@ -59,7 +64,7 @@ struct PointAB {
 
 /* Ячейка, имеет порядковый номер и координаты в декартовой системе*/
 struct Cell {
-    Cell(size_t _x, size_t _y, size_t _n) : x(_x), y(_y), n(_n) {}
+    Cell(size_t _x = 0, size_t _y = 0, size_t _n = 0) : x(_x), y(_y), n(_n) {}
     size_t x;
     size_t y;
     size_t n;       // Порядковый номер на сцене
@@ -68,7 +73,7 @@ struct Cell {
 /* Квадрат, еденица игрового поля
 filled - квадрат содержит пешку*/
 struct Square : public Cell {
-    Square(size_t _x, size_t _y, size_t _n, bool _filled = false) : Cell(_x, _y, _n), filled(_filled){}
+    Square(size_t _x, size_t _y, size_t _n, bool _filled = false) : Cell(_x, _y, _n), filled(_filled) {}
     PointF leftTop;
     PointF rightTop;
     PointF leftBottom;
@@ -85,7 +90,7 @@ struct Pawn : public Cell {
         hgeColorRGB cur_color(0, 0, 1, 1);
         spr_pawn->SetColor(cur_color.GetHWColor());
     };
-    bool place = false;       
+    bool place = false;
     hgeSprite* spr_pawn;
 };
 
@@ -125,13 +130,16 @@ struct Board {
     arr_squars_t arr_squars;
 };
 
+/* Расчитать игровые поля пешек игрока, найти наиболее интересные поля */
 class PlayerPlace {
 public:
     PlayerPlace(const Board* board, Point pointLeftTopCorner, const size_t width = 3, const size_t height = 3) {
-        while (pointLeftTopCorner.x + width >= board->arr_squars.front().size()) {  // Если нестыковка и выходим за границу, то правим точку как можем
+        width_board = board->arr_squars.front().size();
+        height_board = board->arr_squars.size();
+        while (pointLeftTopCorner.x + width > board->arr_squars.front().size()) {  // Если нестыковка и выходим за границу, то правим точку как можем
             pointLeftTopCorner.x--;
         }
-        while (pointLeftTopCorner.y + height >= board->arr_squars.size()) {         // Если нестыковка и выходим за границу, то правим точку как можем
+        while (pointLeftTopCorner.y + height > board->arr_squars.size()) {         // Если нестыковка и выходим за границу, то правим точку как можем
             pointLeftTopCorner.y--;
         }
         std::vector<size_t>* vec = new std::vector<size_t>;
@@ -140,16 +148,78 @@ public:
                 cells.push_back(Cell(j, i, i * board->arr_squars.front().size() + j));
             }
         }
-        Point mostTargetPoint;
+        // Угловые точки и середина (most interesting points left top) ....
+        Point miplt(cells.front().x, cells.front().y);
+        Point miprt(cells.front().x + width - 1, cells.front().y);
+        Point miprb(cells.front().x + width - 1, cells.front().y + height - 1);
+        Point miplb(cells.front().x, cells.front().y + height - 1);
 
+        Point p1 = miplt - Point(0, 0);
+        Point p2 = miprt - Point(board->arr_squars.front().size() - 1, 0);
+        Point p3 = miprb - Point(board->arr_squars.front().size() - 1, board->arr_squars.size() - 1);
+        Point p4 = miplb - Point(0, board->arr_squars.size() - 1);
+
+        std::map<double, Point> minDistance;
+        minDistance.insert({ sqrt(p1.x * p1.x + p1.y * p1.y), miplt });
+        minDistance.insert({ sqrt(p2.x * p2.x + p2.y * p2.y), miprt });
+        minDistance.insert({ sqrt(p3.x * p3.x + p3.y * p3.y), miprb });
+        minDistance.insert({ sqrt(p4.x * p4.x + p4.y * p4.y), miplb });
+
+        Point mip = minDistance.begin()->second;
+        most_interest_point = mip;
+
+        Point mip_middle(cells.front().x + width / 2, cells.front().y + height / 2);
+        Point remaind(width % 2, height % 2);
+
+        //if (!remaind.x) {
+        //    if (board->arr_squars.front().size() / 2 > mip.x) {
+        //        mip.x--;
+        //    }
+        //    else {
+        //        mip.x++;
+        //    }
+        //}
+
+        //if (!remaind.y) {
+        //    if (board->arr_squars.size() / 2 > mip.y) {
+        //        mip.y--;
+        //    }
+        //    else {
+        //        mip.y++;
+        //    }
+        //}
+
+        str = std::string("1-" + std::to_string(miplt.x) + ":" + std::to_string(miplt.y) + "\n" + "2-" + std::to_string(miprt.x) + ":" + std::to_string(miprt.y) + "\n" + "3-" + std::to_string(miprb.x) + ":" + std::to_string(miprb.y) + "\n" + "4-" + std::to_string(miplb.x) + ":" + std::to_string(miplb.y) + "\n" + "middle-" + std::to_string(mip_middle.x) + ":" + std::to_string(mip_middle.y) + "\n" + "remaind-" + std::to_string(remaind.x) + ":" + std::to_string(remaind.y) + "\n" + "mip = " + std::to_string(mip.x) + ":" + std::to_string(mip.y) + "\n");
+        //if(mostInterestPoint.x > board->arr_squars.front().size()-1)
     }
+
+    PlayerPlace* getMirrorPlace() const {
+        PlayerPlace* player = new PlayerPlace(*this);
+        cells_t mirrorPlace;
+        for (size_t i = 0; i < this->cells.size(); i++) {
+            size_t x = width_board - 1 - this->cells[i].x;
+            size_t y = height_board - 1 - this->cells[i].y;
+            size_t n = width_board * y + x;
+            player->cells[i] = Cell(x, y, n);
+        }
+        player->most_interest_point = Point(width_board - 1 - this->most_interest_point.x, height_board - 1 - this->most_interest_point.y);
+        return player;
+    }
+    // 
+    Point most_interest_point;
+    size_t width_board;
+    size_t height_board;
     cells_t cells;
+    std::string str;
 };
 
 /* Пешки игрока/AI */
 struct PawnsPlayer {
     pawns_t pawns;
-    PlayerPlace* plaerPlace;
+    //PlayerPlace* plaerPlace;
+    const PlayerPlace* playerPlace;
+    PlayerPlace* enemyPlace;
+
     //const std::vector<size_t> *pawn_place;
 
     void init_loc_pawn(const cells_t& cells_player) {
@@ -157,6 +227,7 @@ struct PawnsPlayer {
             pawns.push_back(Pawn(cells_player[i].x, cells_player[i].y, cells_player[i].n));
         }
     }
+
     //void init_loc_pawn(const std::vector<size_t>* mapZonePlayer, const size_t width_board) {
     //    for (size_t i = 0; i < mapZonePlayer->size(); i++) {
     //        pawns.push_back(Pawn(mapZonePlayer->at(i) / width_board, mapZonePlayer->at(i) % width_board, mapZonePlayer->at(i)));
@@ -171,11 +242,13 @@ struct PawnsPlayer {
     //    }
     //}
 
-    PawnsPlayer(const Point &point_left_top_corner, const PlayerPlace* player_place)  {
+    PawnsPlayer(const PlayerPlace* player_place) : playerPlace(player_place) {
+        playerPlace = player_place;
         //pawn_place = player_place;
         pawns.reserve(player_place->cells.size());
         init_loc_pawn(player_place->cells);
-    }    
+        enemyPlace = player_place->getMirrorPlace();
+    }
     //PawnsPlayer(const Point &point_left_top_corner, const size_t width_board, const std::vector<size_t>* player_place) : count_items(player_place->size()) {
     //    pawn_place = player_place;
     //    pawns.reserve(count_items);
@@ -189,7 +262,7 @@ struct PawnsPlayer {
 //    Player(Pawns* _pawns) : pawns(_pawns) {}
 //};
 
-/* Ребро графа 
+/* Ребро графа
 по умолчанию длина равная 1 (int)*/
 struct Edge {
     int a, b;
@@ -230,7 +303,7 @@ private:
 };
 
 
-class GameModel : public Observable{
+class GameModel : public Observable {
 
 
     struct StateChoice {
@@ -248,10 +321,12 @@ class GameModel : public Observable{
 public:
     StateChoice stateMouse;
     Message message;
-    Board *board;
+    Board* board;
     Barrier barrier;
-    PlayerPlace* playerPlace;
+    cells_t cells_debug;
+    Cell cell_debug;
     std::vector<PawnsPlayer*> players_pawns;
+
 
     GameModel(const size_t width_side = COUNT_CELLS_ROW) {
         board = new Board(width_side);
@@ -266,7 +341,7 @@ public:
         while (pointLeftTopCorner.y + height >= board->arr_squars.size()) {         // Если нестыковка и выходим за границу, то правим точку как можем
             pointLeftTopCorner.y--;
         }
-        std::vector<size_t> *vec = new std::vector<size_t>;
+        std::vector<size_t>* vec = new std::vector<size_t>;
         for (size_t i = pointLeftTopCorner.y; i < pointLeftTopCorner.y + height; i++) {
             for (size_t j = pointLeftTopCorner.x; j < pointLeftTopCorner.x + width; j++) {
                 vec->push_back(i * board->arr_squars.front().size() + j);
@@ -279,10 +354,8 @@ public:
     left_top_corner - левая верхняя точка, начиная с которой будут расставляться фигуры
     width - количество фигур в ряд
     height - количество фигур в колонку*/
-    //PawnsPlayer* createPawns(const Point &left_top_corner, const size_t width, const size_t height) {
-    PawnsPlayer* createPawns(const Point &left_top_corner, const PlayerPlace *player_place) {
-        PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, player_place);
-        //PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, board->arr_squars.size(), createZonePlayer(left_top_corner, width, height));
+    PawnsPlayer* createPawns(const PlayerPlace* player_place) {
+        PawnsPlayer* player_pawns = new PawnsPlayer(player_place);
         players_pawns.push_back(player_pawns);
         return player_pawns;
     }
@@ -295,7 +368,7 @@ public:
     }
 
 
-    PointAB findPaths(pawns_t &pawns) {
+    PointAB findPaths(pawns_t& pawns) {
 
         std::map<double, std::vector<size_t>> paths;
 
@@ -357,8 +430,8 @@ public:
     }
 
     /* Установить размер спрайта для пешки*/
-    void setSizePawn(const float& w, const float &h) {
-        for(size_t p = 0; p < players_pawns.size(); p++)
+    void setSizePawn(const float& w, const float& h) {
+        for (size_t p = 0; p < players_pawns.size(); p++)
             for (size_t i = 0; i < players_pawns[p]->pawns.size(); i++) {
                 players_pawns[p]->pawns[i].spr_pawn->SetTextureRect(0, 0, w, h);
             }
@@ -389,7 +462,70 @@ public:
         }
     }
 
-    void shortWay(const pawns_t &pawns, int from, int to, std::vector<size_t>& path, int& length) {
+    void getCellsTarget(cells_t& targetCells, const PlayerPlace& playerPlaces, size_t barrier_tolerance) {
+        targetCells.clear();
+        size_t width = playerPlaces.width_board;
+        size_t height = playerPlaces.height_board;
+        Point t = playerPlaces.most_interest_point;
+
+        std::vector<std::vector<size_t> > map(height, std::vector<size_t>(width, 0));
+        std::stack<std::pair<int, int>>stackCells;
+        stackCells.push({ t.x, t.y });
+        while (!stackCells.empty()) {
+            auto [x, y] = stackCells.top();
+            stackCells.pop();
+            map[y][x] = 1;
+            if (x < width - 1 && map[y][x + 1] == 0 && abs(x+1 - t.x) < barrier_tolerance) {
+                stackCells.push({ x + 1, y });
+            }
+            if (x > 0 && map[y][x - 1] == 0 && abs(x - 1 - t.x) < barrier_tolerance) {
+                stackCells.push({ x - 1, y });
+            }
+            if (y < height - 1 && map[y + 1][x] == 0 && abs(y + 1 - t.y) < barrier_tolerance) {
+                stackCells.push({ y + 1, x });
+            }
+            if (y > 0 && map[y - 1][x] == 0 && abs(y + 1 - t.y) < barrier_tolerance) {
+                stackCells.push({ y - 1, x });
+            }
+        }
+
+        for (size_t i = 0; i < width; i++) {
+            for (size_t j = 0; j < height; j++) {
+                if (map[i][j] == 1) {
+                    targetCells.push_back(Cell(j, i, j * height + i));
+                }
+            }
+        }
+        //stackCells.push(Cell(target.x, target.y, target.y * board->arr_squars.size() + target.x));
+        //while (!stackCells.empty()) {
+        //    Cell cell = stackCells.top();
+        //    stackCells.pop();
+        //    if (cell.x < width - 1 && cell.x + 1 - target.x < barrier_tolerance) {
+        //        stackCells.push(Cell(cell.x + 1, target.y, target.y * height + cell.x + 1));
+        //    }
+        //    if (cell.x > 0 && target.x - cell.x - 1 < barrier_tolerance) {
+        //        stackCells.push(Cell(cell.x - 1, target.y, target.y * height + cell.x - 1));
+        //    }
+        //    if (cell.y < height - 1 && cell.y + 1 - target.y < barrier_tolerance) {
+        //        stackCells.push(Cell(cell.x, target.y + 1, (target.y+1) * height + cell.x));
+        //    }
+        //    if (cell.y > 0 && target.y - cell.y - 1 < barrier_tolerance) {
+        //        stackCells.push(Cell(cell.x, target.y - 1, (target.y - 1) * height + cell.x));
+        //    }
+        //}
+        //targetCells.push_back(Cell(target.x, target.y, target.y * board->arr_squars.size() + target.x));
+
+        //for (int i = board->arr_squars.size() - 1; i >= board->arr_squars.size() - barrier_tolerance; i--) {
+        //    for (int j = board->arr_squars.size() - 1; j >= board->arr_squars.size() - barrier_tolerance; j--) {
+        //        if (!board->arr_squars[i][j]->filled)
+        //            targetCells.push_back(Cell(j, i, i * board->arr_squars.size() + j));
+        //    }
+        //}
+
+        notifyUpdate();
+    }
+
+    void shortWay(const pawns_t& pawns, int from, int to, std::vector<size_t>& path, int& length) {
         std::vector<Edge> vec_edge;
         calcVecEdge(pawns, vec_edge);
 
@@ -479,7 +615,7 @@ private:
         y = numberCell / board->arr_squars.size();
     }
 
-    void calcVecEdge(const pawns_t &pawns, std::vector<Edge>& edge) {
+    void calcVecEdge(const pawns_t& pawns, std::vector<Edge>& edge) {
         for (int i = 0; i < board->arr_squars.size(); i++) {
             for (int j = 0; j < board->arr_squars.size(); j++) {
                 Edge ed;
@@ -513,12 +649,77 @@ private:
 
 };
 
+struct ViewPlaceEnemy : public Observer {
+    ViewPlaceEnemy(GameModel* model) {
+        game = model;
+        game->addObserver(this);
+        spr_cell = new hgeSprite(0, 100, 100, 35, 35);
+        spr_cell->SetColor(0x55000077);
+    }
+
+    virtual void update() {
+        for (auto player : game->players_pawns) {
+            const cells_t& cells = player->enemyPlace->cells;
+            const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
+            const float dwBoarder = width_cell - spr_cell->GetWidth();
+            const float dhBoarder = width_cell - spr_cell->GetHeight();
+            for (int i = 0; i < cells.size(); i++) {
+                spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+            }
+        }
+
+    }
+    hgeSprite* spr_cell;
+    GameModel* game;
+};
+
+struct ViewPlaceDebug : public Observer {
+    ViewPlaceDebug(GameModel* model) {
+        game = model;
+        game->addObserver(this);
+        spr_cell = new hgeSprite(0, 100, 100, 35, 35);
+        spr_cell->SetColor(0x55880000);
+    }
+
+    virtual void update() {
+        const std::vector<Cell>& cells = game->cells_debug;
+        const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
+        const float dwBoarder = width_cell - spr_cell->GetWidth();
+        const float dhBoarder = width_cell - spr_cell->GetHeight();
+        for (int i = 0; i < cells.size(); i++) {
+            spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+        }
+
+    }
+    hgeSprite* spr_cell;
+    GameModel* game;
+};
+
+struct ViewPointDebug : public Observer {
+    ViewPointDebug(GameModel* model) {
+        game = model;
+        game->addObserver(this);
+        spr_cell = new hgeSprite(0, 100, 100, 35, 35);
+        spr_cell->SetColor(0x99008800);
+    }
+
+    virtual void update() {
+        const Cell& cell = game->cell_debug;
+        const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
+        const float dwBoarder = width_cell - spr_cell->GetWidth();
+        const float dhBoarder = width_cell - spr_cell->GetHeight();
+        spr_cell->Render(dwBoarder / 2. + cell.x * width_cell, dhBoarder / 2. + cell.y * width_cell);
+    }
+    hgeSprite* spr_cell;
+    GameModel* game;
+};
+
 struct ViewBoard : public Observer {
     ViewBoard(GameModel* model) {
         game = model;
         game->addObserver(this);
     }
-    void renderQuad(const PointF &p1, const PointF &p2, const PointF &p3, const PointF &p4, int color = 0x00FF0000) {
+    void renderQuad(const PointF& p1, const PointF& p2, const PointF& p3, const PointF& p4, int color = 0x00FF0000) {
         hge->Gfx_RenderLine(p1.x, p1.y, p2.x, p2.y, color);
         hge->Gfx_RenderLine(p2.x, p2.y, p3.x, p3.y, color);
         hge->Gfx_RenderLine(p3.x, p3.y, p4.x, p4.y, color);
@@ -526,7 +727,7 @@ struct ViewBoard : public Observer {
     }
 
     virtual void update() {
-        const arr_squars_t &squars = game->board->arr_squars;
+        const arr_squars_t& squars = game->board->arr_squars;
         for (int i = 0; i < squars.size(); i++) {
             for (int j = 0; j < squars.size(); j++) {
                 renderQuad(squars[i][j]->leftTop, squars[i][j]->rightTop, squars[i][j]->rightBottom, squars[i][j]->leftBottom, 0xFFFFFFFF);
@@ -550,13 +751,13 @@ struct ViewPawns : public Observer {
         const float dwBoarder = width_cell - pawns.front().spr_pawn->GetWidth();
         const float dhBoarder = width_cell - pawns.front().spr_pawn->GetHeight();
         for (int i = 0; i < pawns.size(); i++) {
-            pawns[i].spr_pawn->Render(dwBoarder /2. + pawns[i].x * width_cell, dhBoarder / 2. + pawns[i].y * width_cell);
+            pawns[i].spr_pawn->Render(dwBoarder / 2. + pawns[i].x * width_cell, dhBoarder / 2. + pawns[i].y * width_cell);
         }
     }
     GameModel* game;
 };
 
-struct ViewGame : public Observer{
+struct ViewGame : public Observer {
     ViewGame(GameModel* model) {
         game = model;
         game->addObserver(this);
@@ -607,13 +808,16 @@ class Controller
 public:
     Controller(GameModel* model_) : model(model_)
     {
-        player_pawns = model->createPawns(Point(1, 1), new PlayerPlace(model->board, Point(3, 1), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
+        player_pawns = model->createPawns(new PlayerPlace(model->board, Point(6, 0), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
         model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
         model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
+        Point& p = player_pawns->enemyPlace->most_interest_point;
+        model->cell_debug = Cell(p.x, p.y, p.x + p.y * player_pawns->enemyPlace->width_board);
+
     }
 
     bool processGame() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
         std::map<double, std::vector<size_t>> paths;
 
         pawns_t& pawns = player_pawns->pawns;
@@ -626,7 +830,7 @@ public:
             numbersCellsWins.clear();
             if (barrier_tolerance == COUNT_CELLS_ROW) {
                 std::cout << "pad";
-                return false ;
+                return false;
             }
             model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
             for (size_t i = 0; i < pawns.size(); i++) {
@@ -659,10 +863,10 @@ public:
 
         auto it = paths.begin()->second.begin();
 
-        int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it+1) % COUNT_CELLS_ROW, *(it+1) / COUNT_CELLS_ROW, pawns);
+        int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it + 1) % COUNT_CELLS_ROW, *(it + 1) / COUNT_CELLS_ROW, pawns);
         if (*it == 55)
             std::cout << "";
-        if (paths.begin()->first == 1) { 
+        if (paths.begin()->first == 1) {
             pawns[ret].place = true;        // Когда длина для последнего перемещения пешки была равна 1 значит пешка добралась до места назначения, делаем пометку
         }
         return true;
@@ -671,13 +875,29 @@ public:
     void perform()
     {
         //model->findPaths(player_pawns->pawns);
+
+        int barrier = 3;
+        model->getCellsTarget(model->cells_debug, *player_pawns->enemyPlace, barrier);
+
         processGame();
-        model->printString("hello MVC", 450, 350);
+        std::string points_str = player_pawns->playerPlace->str;
+        model->printString(points_str, 450, 350);
+
+
+
+
+        std::string str = points_str;
+        //model->printString(str);
+        if (temp == 1)
+            std::cout << "stop";
+
         if (hge->Input_IsMouseOver()) {
             model->updateCursor();
         }
+        temp++;
     }
 private:
+    int temp = 0;
     PawnsPlayer* player_pawns;
     GameModel* model;
 };
@@ -846,7 +1066,7 @@ public:
                 }
             }
         }
-        
+
     }
 
     void shortWay(int from, int to, std::vector<size_t>& path, double& length, const std::vector<std::vector<int>>& mapPawns) {
@@ -899,7 +1119,7 @@ public:
             }
         }
     }
-    
+
     struct Barrier {
         size_t currentLvlBarrier = 1;
         double maxLvlBarrier = 1.1f;
@@ -907,7 +1127,7 @@ public:
         size_t currentFill = 0;
 
     };
-    
+
     Barrier barrier;
 
     void findPaths() {
@@ -946,7 +1166,7 @@ public:
                     paths.clear();
                     barrier_tolerance = 0;
                     barrier.currentLvlBarrier = barrier_tolerance;
-                }     
+                }
             }
         }
 
@@ -986,7 +1206,7 @@ public:
         for (size_t i = 0; i < player.size(); i++) {
             if (player[i].x >= 3 || player[i].y >= 3) {
                 check = false;
-            }    
+            }
         }
         if (check) {
             printState("PLAYER WIN!");
@@ -1150,7 +1370,8 @@ public:
         if (state_step == STATE_STEP_ENEMY && cycle) {
             findPaths();
             state_step = STATE_STEP_PLAYER;
-        } else {
+        }
+        else {
             if (stateCursor.choice) {
                 fnt->printf(10, 70, HGETEXT_LEFT, "x=%d y=%d", stateCursor.x, stateCursor.y);
                 renderCell(stateCursor.x, stateCursor.y, 0xFFFF00FF);
@@ -1186,7 +1407,7 @@ public:
                 std::vector<std::vector<int>> mapPawns(COUNT_RANGE, std::vector<int>(COUNT_RANGE, 0));
                 remapPawns(mapPawns);
 
-                printState(std::to_string(index_x_r) + " " + std::to_string(index_y_r) + " " + std::to_string(mapPawns[index_x_r][index_y_r]) + " " + std::to_string(getPawnPlaceOfNumber(index_x_r*COUNT_RANGE+index_y_r, enemy)));
+                printState(std::to_string(index_x_r) + " " + std::to_string(index_y_r) + " " + std::to_string(mapPawns[index_x_r][index_y_r]) + " " + std::to_string(getPawnPlaceOfNumber(index_x_r * COUNT_RANGE + index_y_r, enemy)));
             }
             if (hge->Input_GetKeyState(HGEK_LBUTTON)) {
 

@@ -12,6 +12,9 @@ Controller* controller;
 ViewText* text;
 ViewBoard* viewBoard;
 ViewPawns* viewPawns;
+ViewPlaceEnemy* veiwPlaceEnemy;
+ViewPlaceDebug* veiwPlaceDebug;
+ViewPointDebug* veiwPointDebug;
 hgeFont* fnt;
 
 Game* doska;
@@ -95,6 +98,9 @@ void init_window() {
     view = new ViewGame(game);
     viewPawns = new ViewPawns(game);
     viewBoard = new ViewBoard(game);
+    veiwPlaceEnemy = new ViewPlaceEnemy(game);
+    veiwPlaceDebug = new ViewPlaceDebug(game);
+    veiwPointDebug = new ViewPointDebug(game);
     text = new ViewText(game);
     cursor = new ViewCursor(game);      // курсор добавлять последним чтоб отрисовывался поверх 
     controller = new Controller(game);
