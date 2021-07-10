@@ -258,6 +258,41 @@ struct Barrier {
 
 };
 
+class Game {
+    GameModel* game;
+    ViewGame* view;
+    ViewCursor* cursor;
+    Controller* controller;
+    ViewText* text;
+    ViewBoard* viewBoard;
+    ViewPawns* viewPawns;
+    ViewPlaceEnemy* viewPlaceEnemy;
+    ViewPlaceDebug* viewPlaceDebug;
+    ViewCellsTarget* viewCellsTarget;
+    ViewPointDebug* viewPointDebug;
+    hgeFont* fnt;
+
+public:
+    Game() {
+        // TODO создать контроллер с указанием кто им будет играть
+        // 
+    }
+    ~Game() {
+        delete game;
+        delete view;
+        delete cursor;
+        delete controller;
+        delete text;
+        delete viewBoard;
+        delete viewPawns;
+        delete viewPlaceEnemy;
+        delete viewPlaceDebug;
+        delete viewCellsTarget;
+        delete viewPointDebug;
+        delete fnt;
+    }
+};
+
 
 
 #endif // GAME_H

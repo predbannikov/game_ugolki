@@ -19,7 +19,7 @@ ViewCellsTarget* veiwCellsTarget;
 ViewPointDebug* veiwPointDebug;
 hgeFont* fnt;
 
-//Game_* doska;
+
 
 
 void init_window();

@@ -3,7 +3,7 @@
 Controller::Controller(GameModel* model_) : model(model_)
 {
     player_pawns = model->createPawns(new PlayerPlace(model->board, Point(0, 0), 3, 3));   // Создать фигуры 
-    model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
+    model->arrangeFigures(player_pawns->pawns);             // Расставляем фигуры на доске
     model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
     const Point& p = player_pawns->enemyPlace->most_interest_point;
     width = player_pawns->enemyPlace->width_board;
