@@ -462,65 +462,52 @@ public:
         }
     }
 
-    void getCellsTarget(cells_t& targetCells, const PlayerPlace& playerPlaces, size_t barrier_tolerance) {
+    void getCellsTarget(cells_t& targetCells, const PlayerPlace& enemyPlace, size_t barrier_tolerance, bool inside = true) {
         targetCells.clear();
-        size_t width = playerPlaces.width_board;
-        size_t height = playerPlaces.height_board;
-        Point t = playerPlaces.most_interest_point;
+        size_t width = enemyPlace.width_board;
+        size_t height = enemyPlace.height_board;
+        Point t = enemyPlace.most_interest_point;
 
         std::vector<std::vector<size_t> > map(height, std::vector<size_t>(width, 0));
         std::stack<std::pair<int, int>>stackCells;
-        stackCells.push({ t.x, t.y });
+        stackCells.push({ t.y, t.x });
         while (!stackCells.empty()) {
-            auto [x, y] = stackCells.top();
+            auto [y, x] = stackCells.top();
             stackCells.pop();
             map[y][x] = 1;
-            if (x < width - 1 && map[y][x + 1] == 0 && abs(x+1 - t.x) < barrier_tolerance) {
-                stackCells.push({ x + 1, y });
+            if (x < width - 1 && map[y][x + 1] == 0 && abs(x + 1 - t.x) < barrier_tolerance) {
+                stackCells.push({y, x + 1});
             }
             if (x > 0 && map[y][x - 1] == 0 && abs(x - 1 - t.x) < barrier_tolerance) {
-                stackCells.push({ x - 1, y });
+                stackCells.push({y, x - 1});
             }
             if (y < height - 1 && map[y + 1][x] == 0 && abs(y + 1 - t.y) < barrier_tolerance) {
-                stackCells.push({ y + 1, x });
+                stackCells.push({ y + 1, x});
             }
-            if (y > 0 && map[y - 1][x] == 0 && abs(y + 1 - t.y) < barrier_tolerance) {
+            if (y > 0 && map[y - 1][x] == 0 && abs(y - 1 - t.y) < barrier_tolerance) {
                 stackCells.push({ y - 1, x });
             }
         }
 
-        for (size_t i = 0; i < width; i++) {
-            for (size_t j = 0; j < height; j++) {
-                if (map[i][j] == 1) {
-                    targetCells.push_back(Cell(j, i, j * height + i));
+        if (inside) {
+            const cells_t& cells = enemyPlace.cells;
+            for (size_t i = 0; i < cells.size(); i++) {
+                if (map[cells[i].y][cells[i].x] == 1 && !board->arr_squars[cells[i].y][cells[i].x]->filled) {
+                    targetCells.push_back(Cell(cells[i].x, cells[i].y, cells[i].n));
+                }
+            }
+        } else {
+            for (size_t i = 0; i < width; i++) {
+                for (size_t j = 0; j < height; j++) {
+                    if (map[i][j] == 1 && !board->arr_squars[i][j]->filled) {
+                        targetCells.push_back(Cell(j, i, j*height + i));
+                    }
                 }
             }
         }
-        //stackCells.push(Cell(target.x, target.y, target.y * board->arr_squars.size() + target.x));
-        //while (!stackCells.empty()) {
-        //    Cell cell = stackCells.top();
-        //    stackCells.pop();
-        //    if (cell.x < width - 1 && cell.x + 1 - target.x < barrier_tolerance) {
-        //        stackCells.push(Cell(cell.x + 1, target.y, target.y * height + cell.x + 1));
-        //    }
-        //    if (cell.x > 0 && target.x - cell.x - 1 < barrier_tolerance) {
-        //        stackCells.push(Cell(cell.x - 1, target.y, target.y * height + cell.x - 1));
-        //    }
-        //    if (cell.y < height - 1 && cell.y + 1 - target.y < barrier_tolerance) {
-        //        stackCells.push(Cell(cell.x, target.y + 1, (target.y+1) * height + cell.x));
-        //    }
-        //    if (cell.y > 0 && target.y - cell.y - 1 < barrier_tolerance) {
-        //        stackCells.push(Cell(cell.x, target.y - 1, (target.y - 1) * height + cell.x));
-        //    }
-        //}
-        //targetCells.push_back(Cell(target.x, target.y, target.y * board->arr_squars.size() + target.x));
 
-        //for (int i = board->arr_squars.size() - 1; i >= board->arr_squars.size() - barrier_tolerance; i--) {
-        //    for (int j = board->arr_squars.size() - 1; j >= board->arr_squars.size() - barrier_tolerance; j--) {
-        //        if (!board->arr_squars[i][j]->filled)
-        //            targetCells.push_back(Cell(j, i, i * board->arr_squars.size() + j));
-        //    }
-        //}
+
+
 
         notifyUpdate();
     }
@@ -808,7 +795,7 @@ class Controller
 public:
     Controller(GameModel* model_) : model(model_)
     {
-        player_pawns = model->createPawns(new PlayerPlace(model->board, Point(6, 0), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
+        player_pawns = model->createPawns(new PlayerPlace(model->board, Point(6, 3), 4, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
         model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
         model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
         Point& p = player_pawns->enemyPlace->most_interest_point;
@@ -872,14 +859,54 @@ public:
         return true;
     }
 
+    void getPaths(std::map<double, std::vector<size_t>>& paths, size_t barrier) {
+        //if (barrier_tolerance != 0)
+        //    std::cout << "";
+        //numbersCellsWins.clear();
+        //if (barrier_tolerance == COUNT_CELLS_ROW) {
+        //    std::cout << "pad";
+        //    return false;
+        //}
+        //model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
+        //for (size_t i = 0; i < pawns.size(); i++) {
+        //    if (!pawns[i].place)
+        //        for (size_t j = 0; j < numbersCellsWins.size(); j++) {
+        //            std::vector<size_t> path;
+        //            int length = -1;
+        //            model->shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
+        //            if (length > 0)
+        //                paths[length] = path;
+        //        }
+        //}
+        //barrier_tolerance++;
+        //if (!paths.empty()) {
+        //    std::cout << "";
+        //    if (barrier_tolerance < model->barrier.currentLvlBarrier) {
+        //        for (size_t i = 0; i < pawns.size(); i++)
+        //            pawns[i].place = false;
+        //        paths.clear();
+        //        barrier_tolerance = 0;
+        //        model->barrier.currentLvlBarrier = barrier_tolerance;
+        //    }
+        //}
+    }
+
+    void process() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        std::map<double, std::vector<size_t>> paths;
+        size_t barrier_tolerance = 0;
+        std::vector<int> numbersCellsWins;
+
+    }
+
     void perform()
     {
         //model->findPaths(player_pawns->pawns);
 
-        int barrier = 3;
-        model->getCellsTarget(model->cells_debug, *player_pawns->enemyPlace, barrier);
+        int barrier = 2;
+        model->getCellsTarget(model->cells_debug, *player_pawns->enemyPlace, barrier, false);
 
-        processGame();
+        //processGame();
         std::string points_str = player_pawns->playerPlace->str;
         model->printString(points_str, 450, 350);
 
