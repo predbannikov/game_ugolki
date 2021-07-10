@@ -29,16 +29,16 @@ class Pawn;
 class Cell;
 class PlayerPlace;
 
-/*Тип для массив квадратов*/
+/* Тип для массив квадратов*/
 using squars_t = std::vector<Square*>;
 
-/*Тип для массива массивов квадратов*/
+/* Тип для массива массивов квадратов*/
 using arr_squars_t = std::vector<squars_t>;
 
-/*Тип для массива пешек*/
+/* Тип для массива пешек*/
 using pawns_t = std::vector<Pawn>;
 
-/*Тип для хранения ячеек*/
+/* Тип для хранения ячеек*/
 using cells_t = std::vector<Cell>;
 
 struct PointF { 
@@ -56,7 +56,7 @@ struct PointAB {
     int a, b;
 };
 
-/*Ячейка, имеет порядковый номер и координаты в декартовой системе*/
+/* Ячейка, имеет порядковый номер и координаты в декартовой системе*/
 struct Cell {
     Cell(size_t _x, size_t _y, size_t _n) : x(_x), y(_y), n(_n) {}
     size_t x;
@@ -64,7 +64,7 @@ struct Cell {
     size_t n;       // Порядковый номер на сцене
 };
 
-/*Квадрат, еденица игрового поля
+/* Квадрат, еденица игрового поля
 filled - квадрат содержит пешку*/
 struct Square : public Cell {
     Square(size_t _x, size_t _y, size_t _n, bool _filled = false) : Cell(_x, _y, _n), filled(_filled){}
@@ -75,7 +75,7 @@ struct Square : public Cell {
     bool filled;
 };
 
-/*Пешка
+/* Пешка
 place - фигура выполнила свою рабту (достигла своей задачи/цели)
 quad - полигон или текстура для отображения пешки*/
 struct Pawn : public Cell {
@@ -88,7 +88,7 @@ struct Pawn : public Cell {
     hgeSprite* spr_pawn;
 };
 
-/*Игровая доска*/
+/* Игровая доска*/
 struct Board {
     Board(size_t count_items_side = COUNT_CELLS_ROW, float width_item = WIDTH_CELL) {
         float tmp_x = 0;
@@ -99,7 +99,7 @@ struct Board {
         for (size_t i = 0; i < count_items_side; i++) {
             squars_t squarsTmp(count_items_side);
             for (size_t j = 0; j < count_items_side; j++) {
-                Square* squar = new Square(i, j, i * count_items_side + j);
+                Square* squar = new Square(j, i, i * count_items_side + j);
                 squar->leftTop.x = tmp_x;
                 squar->leftTop.y = tmp_y;
 
@@ -113,11 +113,11 @@ struct Board {
                 squar->leftBottom.y = tmp_y + width_item;
                 squars[squar->n] = squar;
                 squarsTmp[j] = squar;
-                tmp_y += width_item;
+                tmp_x += width_item;
             }
+            tmp_y += width_item;
             arr_squars[i] = squarsTmp;
-            tmp_x += width_item;
-            tmp_y = 0;
+            tmp_x = 0;
         }
     }
     squars_t squars;
@@ -145,7 +145,7 @@ public:
     cells_t cells;
 };
 
-/*Пешки игрока/AI */
+/* Пешки игрока/AI */
 struct PawnsPlayer {
     pawns_t pawns;
     PlayerPlace* plaerPlace;
@@ -188,7 +188,7 @@ struct PawnsPlayer {
 //    Player(Pawns* _pawns) : pawns(_pawns) {}
 //};
 
-/*Ребро графа 
+/* Ребро графа 
 по умолчанию длина равная 1 (int)*/
 struct Edge {
     int a, b;
@@ -257,7 +257,7 @@ public:
 
     };
 
-    /*Создать массив содержащий номера зоны игрока*/
+    /* Создать массив содержащий номера зоны игрока*/
     std::vector<size_t>* createZonePlayer(Point pointLeftTopCorner, size_t width = 3, size_t height = 3) {
         while (pointLeftTopCorner.x + width >= board->arr_squars.front().size()) {  // Если нестыковка и выходим за границу, то правим точку как можем
             pointLeftTopCorner.x--;
@@ -274,7 +274,7 @@ public:
         return vec;
     }
 
-    /*Создать фигуры
+    /* Создать фигуры
     left_top_corner - левая верхняя точка, начиная с которой будут расставляться фигуры
     width - количество фигур в ряд
     height - количество фигур в колонку*/
@@ -286,7 +286,7 @@ public:
         return player_pawns;
     }
 
-    /*Расставить фигуры на доске*/
+    /* Расставить фигуры на доске*/
     void arrangeFigures(const pawns_t& pawns) {
         for (size_t i = 0; i < pawns.size(); i++) {
             board->arr_squars[pawns[i].x][pawns[i].y]->filled = true;
@@ -355,7 +355,7 @@ public:
         return PointAB();
     }
 
-    /*Установить размер спрайта для пешки*/
+    /* Установить размер спрайта для пешки*/
     void setSizePawn(const float& w, const float &h) {
         for(size_t p = 0; p < players_pawns.size(); p++)
             for (size_t i = 0; i < players_pawns[p]->pawns.size(); i++) {
@@ -378,7 +378,7 @@ public:
     }
 
     // TODO На данный момент всё завязано статически, ищутся ячейки ближайшие к правому нижнему углу
-    /*Получить номера ячеек к которым искать пути и положить их в вектор*/
+    /* Получить номера ячеек к которым искать пути и положить их в вектор*/
     void getCellsToSearchPath(std::vector<int>& searchCells, size_t barrier_tolerance) {
         for (int i = board->arr_squars.size() - 1; i >= board->arr_squars.size() - barrier_tolerance; i--) {
             for (int j = board->arr_squars.size() - 1; j >= board->arr_squars.size() - barrier_tolerance; j--) {
@@ -439,7 +439,7 @@ public:
         }
     }
 
-    /*Передвинуть пешку*/
+    /* Передвинуть пешку*/
     int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, pawns_t& pawns) {
         for (size_t i = 0; i < pawns.size(); i++) {
             if (pawns[i].x == index_x && pawns[i].y == index_y) {
@@ -528,7 +528,7 @@ struct ViewBoard : public Observer {
         for (int i = 0; i < squars.size(); i++) {
             for (int j = 0; j < squars.size(); j++) {
                 renderQuad(squars[i][j]->leftTop, squars[i][j]->rightTop, squars[i][j]->rightBottom, squars[i][j]->leftBottom, 0xFFFFFFFF);
-                fnt->printf(squars[i][j]->leftTop.x, squars[i][j]->leftTop.y, HGETEXT_LEFT, " %i", i * squars[i].size() + j);               // TODO перенести во вьюшку
+                fnt->printf(squars[i][j]->leftTop.x, squars[i][j]->leftTop.y, HGETEXT_LEFT, " %i", squars[i][j]->n);               // TODO перенести во вьюшку
             }
         }
     }
