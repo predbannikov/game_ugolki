@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <thread>
 
 
 
@@ -136,7 +137,7 @@ public:
         std::vector<size_t>* vec = new std::vector<size_t>;
         for (size_t i = pointLeftTopCorner.y; i < pointLeftTopCorner.y + height; i++) {
             for (size_t j = pointLeftTopCorner.x; j < pointLeftTopCorner.x + width; j++) {
-                cells.push_back(Cell(i, j, i * board->arr_squars.front().size() + j));
+                cells.push_back(Cell(j, i, i * board->arr_squars.front().size() + j));
             }
         }
         Point mostTargetPoint;
@@ -289,7 +290,7 @@ public:
     /* Расставить фигуры на доске*/
     void arrangeFigures(const pawns_t& pawns) {
         for (size_t i = 0; i < pawns.size(); i++) {
-            board->arr_squars[pawns[i].x][pawns[i].y]->filled = true;
+            board->arr_squars[pawns[i].y][pawns[i].x]->filled = true;
         }
     }
 
@@ -445,9 +446,9 @@ public:
             if (pawns[i].x == index_x && pawns[i].y == index_y) {
                 pawns[i].x = to_x;
                 pawns[i].y = to_y;
-                pawns[i].n = to_x * board->arr_squars.size() + to_y;
-                board->arr_squars[index_x][index_y]->filled = false;
-                board->arr_squars[to_x][to_y]->filled = true;
+                pawns[i].n = to_y * board->arr_squars.size() + to_x;
+                board->arr_squars[index_y][index_x]->filled = false;
+                board->arr_squars[to_y][to_x]->filled = true;
                 return i;
             }
         }
@@ -474,18 +475,19 @@ private:
     }
 
     void getIndexs(const size_t numberCell, size_t& x, size_t& y) {
-        x = numberCell / board->arr_squars.size();
-        y = numberCell % board->arr_squars.size();
+        x = numberCell % board->arr_squars.size();
+        y = numberCell / board->arr_squars.size();
     }
 
     void calcVecEdge(const pawns_t &pawns, std::vector<Edge>& edge) {
         for (int i = 0; i < board->arr_squars.size(); i++) {
             for (int j = 0; j < board->arr_squars.size(); j++) {
                 Edge ed;
-                ed.cost = 1.0f;
-                ed.a = j + i * board->arr_squars.size();
-                if (j == 3)
-                    std::cout << "";
+                ed.cost = 1;
+                ed.a = board->arr_squars[i][j]->n;
+                //ed.a = j + i * board->arr_squars.size();
+                //if (j == 3)
+                //    std::cout << "";
                 if (getPawnPlaceOfNumber(ed.a, pawns))
                     continue;
                 if (j - 1 >= 0 && !board->arr_squars[i][j - 1]->filled) {
@@ -605,12 +607,13 @@ class Controller
 public:
     Controller(GameModel* model_) : model(model_)
     {
-        player_pawns = model->createPawns(Point(1, 1), new PlayerPlace(model->board, Point(1, 1), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
+        player_pawns = model->createPawns(Point(1, 1), new PlayerPlace(model->board, Point(3, 1), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
         model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
         model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
     }
 
     bool processGame() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         std::map<double, std::vector<size_t>> paths;
 
         pawns_t& pawns = player_pawns->pawns;
@@ -656,7 +659,7 @@ public:
 
         auto it = paths.begin()->second.begin();
 
-        int ret = model->move_pawn(*it/COUNT_CELLS_ROW, *it%COUNT_CELLS_ROW, *(it+1)/COUNT_CELLS_ROW, *(it+1)%COUNT_CELLS_ROW, pawns);
+        int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it+1) % COUNT_CELLS_ROW, *(it+1) / COUNT_CELLS_ROW, pawns);
         if (*it == 55)
             std::cout << "";
         if (paths.begin()->first == 1) { 
