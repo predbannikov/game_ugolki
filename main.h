@@ -12,6 +12,7 @@
 #include <map>
 #include <stack>
 #include <thread>
+#include "observ.h"
 
 
 
@@ -256,11 +257,6 @@ struct PawnsPlayer {
     //}
 };
 
-//class Player {
-//public:
-//    Pawns* pawns;
-//    Player(Pawns* _pawns) : pawns(_pawns) {}
-//};
 
 /* Ребро графа
 по умолчанию длина равная 1 (int)*/
@@ -276,32 +272,6 @@ struct Barrier {
     size_t currentFill = 0;
 
 };
-
-class Observer
-{
-public:
-    virtual void update() = 0;
-};
-
-class Observable
-{
-public:
-    void addObserver(Observer* observer)
-    {
-        _observers.push_back(observer);
-    }
-    void notifyUpdate()
-    {
-        int size = _observers.size();
-        for (int i = 0; i < size; i++)
-        {
-            _observers[i]->update();
-        }
-    }
-private:
-    std::vector<Observer*> _observers;
-};
-
 
 class GameModel : public Observable {
 
@@ -324,6 +294,7 @@ public:
     Board* board;
     Barrier barrier;
     cells_t cells_debug;
+    cells_t cells_target;
     Cell cell_debug;
     std::vector<PawnsPlayer*> players_pawns;
 
@@ -665,11 +636,11 @@ struct ViewPlaceDebug : public Observer {
         game = model;
         game->addObserver(this);
         spr_cell = new hgeSprite(0, 100, 100, 35, 35);
-        spr_cell->SetColor(0x55880000);
+        spr_cell->SetColor(0x99666666);
     }
 
     virtual void update() {
-        const std::vector<Cell>& cells = game->cells_debug;
+        const cells_t& cells = game->cells_debug;
         const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
         const float dwBoarder = width_cell - spr_cell->GetWidth();
         const float dhBoarder = width_cell - spr_cell->GetHeight();
@@ -696,6 +667,28 @@ struct ViewPointDebug : public Observer {
         const float dwBoarder = width_cell - spr_cell->GetWidth();
         const float dhBoarder = width_cell - spr_cell->GetHeight();
         spr_cell->Render(dwBoarder / 2. + cell.x * width_cell, dhBoarder / 2. + cell.y * width_cell);
+    }
+    hgeSprite* spr_cell;
+    GameModel* game;
+};
+
+struct ViewCellsTarget : public Observer {
+    ViewCellsTarget(GameModel* model) {
+        game = model;
+        game->addObserver(this);
+        spr_cell = new hgeSprite(0, 100, 100, 35, 35);
+        spr_cell->SetColor(0x55880000);
+    }
+
+    virtual void update() {
+        const cells_t& cells = game->cells_target;
+        const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
+        const float dwBoarder = width_cell - spr_cell->GetWidth();
+        const float dhBoarder = width_cell - spr_cell->GetHeight();
+        for (int i = 0; i < cells.size(); i++) {
+            spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+        }
+
     }
     hgeSprite* spr_cell;
     GameModel* game;
@@ -790,145 +783,6 @@ public:
     GameModel* game;
 };
 
-class Controller
-{
-public:
-    Controller(GameModel* model_) : model(model_)
-    {
-        player_pawns = model->createPawns(new PlayerPlace(model->board, Point(6, 3), 4, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
-        model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
-        model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
-        Point& p = player_pawns->enemyPlace->most_interest_point;
-        model->cell_debug = Cell(p.x, p.y, p.x + p.y * player_pawns->enemyPlace->width_board);
-
-    }
-
-    bool processGame() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        std::map<double, std::vector<size_t>> paths;
-
-        pawns_t& pawns = player_pawns->pawns;
-
-        size_t barrier_tolerance = 0;
-        std::vector<int> numbersCellsWins;
-        while (paths.empty()) {
-            if (barrier_tolerance != 0)
-                std::cout << "";
-            numbersCellsWins.clear();
-            if (barrier_tolerance == COUNT_CELLS_ROW) {
-                std::cout << "pad";
-                return false;
-            }
-            model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
-            for (size_t i = 0; i < pawns.size(); i++) {
-                if (!pawns[i].place)
-                    for (size_t j = 0; j < numbersCellsWins.size(); j++) {
-                        std::vector<size_t> path;
-                        int length = -1;
-                        model->shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
-                        if (length > 0)
-                            paths[length] = path;
-                    }
-            }
-            barrier_tolerance++;
-            if (!paths.empty()) {
-                std::cout << "";
-                if (barrier_tolerance < model->barrier.currentLvlBarrier) {
-                    for (size_t i = 0; i < pawns.size(); i++)
-                        pawns[i].place = false;
-                    paths.clear();
-                    barrier_tolerance = 0;
-                    model->barrier.currentLvlBarrier = barrier_tolerance;
-                }
-            }
-        }
-
-        model->barrier.currentLvlBarrier = barrier_tolerance;
-
-        if (paths.size() == 1)
-            std::cout << "";
-
-        auto it = paths.begin()->second.begin();
-
-        int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it + 1) % COUNT_CELLS_ROW, *(it + 1) / COUNT_CELLS_ROW, pawns);
-        if (*it == 55)
-            std::cout << "";
-        if (paths.begin()->first == 1) {
-            pawns[ret].place = true;        // Когда длина для последнего перемещения пешки была равна 1 значит пешка добралась до места назначения, делаем пометку
-        }
-        return true;
-    }
-
-    void getPaths(std::map<double, std::vector<size_t>>& paths, size_t barrier) {
-        //if (barrier_tolerance != 0)
-        //    std::cout << "";
-        //numbersCellsWins.clear();
-        //if (barrier_tolerance == COUNT_CELLS_ROW) {
-        //    std::cout << "pad";
-        //    return false;
-        //}
-        //model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
-        //for (size_t i = 0; i < pawns.size(); i++) {
-        //    if (!pawns[i].place)
-        //        for (size_t j = 0; j < numbersCellsWins.size(); j++) {
-        //            std::vector<size_t> path;
-        //            int length = -1;
-        //            model->shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
-        //            if (length > 0)
-        //                paths[length] = path;
-        //        }
-        //}
-        //barrier_tolerance++;
-        //if (!paths.empty()) {
-        //    std::cout << "";
-        //    if (barrier_tolerance < model->barrier.currentLvlBarrier) {
-        //        for (size_t i = 0; i < pawns.size(); i++)
-        //            pawns[i].place = false;
-        //        paths.clear();
-        //        barrier_tolerance = 0;
-        //        model->barrier.currentLvlBarrier = barrier_tolerance;
-        //    }
-        //}
-    }
-
-    void process() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        std::map<double, std::vector<size_t>> paths;
-        size_t barrier_tolerance = 0;
-        std::vector<int> numbersCellsWins;
-
-    }
-
-    void perform()
-    {
-        //model->findPaths(player_pawns->pawns);
-
-        int barrier = 2;
-        model->getCellsTarget(model->cells_debug, *player_pawns->enemyPlace, barrier, false);
-
-        //processGame();
-        std::string points_str = player_pawns->playerPlace->str;
-        model->printString(points_str, 450, 350);
-
-
-
-
-        std::string str = points_str;
-        //model->printString(str);
-        if (temp == 1)
-            std::cout << "stop";
-
-        if (hge->Input_IsMouseOver()) {
-            model->updateCursor();
-        }
-        temp++;
-    }
-private:
-    int temp = 0;
-    PawnsPlayer* player_pawns;
-    GameModel* model;
-};
-
 
 
 
@@ -964,7 +818,7 @@ public:
     Point rightBottom;
 };
 
-class Game {
+class Game_ {
     struct PawnOld;
     using pawns_t = std::vector<PawnOld>;
     using cells_t = std::vector<std::vector<Cell_>>;
@@ -1004,7 +858,7 @@ class Game {
     enum STATE_STEP { STATE_STEP_ENEMY, STATE_STEP_PLAYER } state_step = STATE_STEP_ENEMY;
 public:
 
-    Game(float width = 10.0f, int x = 8, int y = 8) : width_cell(width), count_cell_x(x), count_cell_y(y) {
+    Game_(float width = 10.0f, int x = 8, int y = 8) : width_cell(width), count_cell_x(x), count_cell_y(y) {
         cells.resize(x);
         for (int i = 0; i < x; i++)
             cells[i].resize(y);

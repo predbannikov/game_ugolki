@@ -3,8 +3,19 @@ cmake_minimum_required( VERSION 2.8 )
 
 #------ sources ------
 set( HGE_FONTEDIT_SRC
+    gamemodel.h
+    gamemodel.cpp
+    game.h
+    game.cpp
+    view.h
+    view.cpp
+    controller.h
+    controller.cpp
+    observ.h
+    observ.cpp
     main.cpp
-    main.h)
+    main.h
+    ) 
 
 set(CMAKE_CXX_STANDARD 17)
 
