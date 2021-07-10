@@ -26,6 +26,8 @@ extern hgeFont* fnt;
 
 class Square;
 class Pawn;
+class Cell;
+class PlayerPlace;
 
 /*Тип для массив квадратов*/
 using squars_t = std::vector<Square*>;
@@ -35,6 +37,9 @@ using arr_squars_t = std::vector<squars_t>;
 
 /*Тип для массива пешек*/
 using pawns_t = std::vector<Pawn>;
+
+/*Тип для хранения ячеек*/
+using cells_t = std::vector<Cell>;
 
 struct PointF { 
     PointF(float _x = 0.0f, float _y = 0.0f): x(_x), y(_y){}
@@ -83,31 +88,98 @@ struct Pawn : public Cell {
     hgeSprite* spr_pawn;
 };
 
-/*Пешки игрока/AI */
-struct PawnsPlayer {
-    const size_t& count_items;
-    pawns_t pawns;
-    const std::vector<size_t> *pawn_place;
+/*Игровая доска*/
+struct Board {
+    Board(size_t count_items_side = COUNT_CELLS_ROW, float width_item = WIDTH_CELL) {
+        float tmp_x = 0;
+        float tmp_y = 0;
+        size_t counter = 0;
+        arr_squars.resize(count_items_side);
+        squars.resize(count_items_side * count_items_side);
+        for (size_t i = 0; i < count_items_side; i++) {
+            squars_t squarsTmp(count_items_side);
+            for (size_t j = 0; j < count_items_side; j++) {
+                Square* squar = new Square(i, j, i * count_items_side + j);
+                squar->leftTop.x = tmp_x;
+                squar->leftTop.y = tmp_y;
 
-    void init_loc_pawn(const std::vector<size_t>* mapZonePlayer, const size_t width_board) {
-        for (size_t i = 0; i < mapZonePlayer->size(); i++) {
-            pawns.push_back(Pawn(mapZonePlayer->at(i) / width_board, mapZonePlayer->at(i) % width_board, mapZonePlayer->at(i)));
+                squar->rightTop.x = tmp_x + width_item;
+                squar->rightTop.y = tmp_y;
+
+                squar->rightBottom.x = tmp_x + width_item;
+                squar->rightBottom.y = tmp_y + width_item;
+
+                squar->leftBottom.x = tmp_x;
+                squar->leftBottom.y = tmp_y + width_item;
+                squars[squar->n] = squar;
+                squarsTmp[j] = squar;
+                tmp_y += width_item;
+            }
+            arr_squars[i] = squarsTmp;
+            tmp_x += width_item;
+            tmp_y = 0;
         }
     }
+    squars_t squars;
+    arr_squars_t arr_squars;
+};
 
-    void init_right_bottom() {
-        for (size_t i = COUNT_CELLS_ROW - 1; i > COUNT_CELLS_ROW - 1 - COUNT_PAWNS_ROW_INIT; i--) {
-            for (size_t j = COUNT_CELLS_ROW - 1; j > COUNT_CELLS_ROW - 1 - COUNT_PAWNS_ROW_INIT; j--) {
-                pawns.push_back(Pawn(i, j, i * COUNT_CELLS_ROW + j));
+class PlayerPlace {
+public:
+    PlayerPlace(const Board* board, Point pointLeftTopCorner, const size_t width = 3, const size_t height = 3) {
+        while (pointLeftTopCorner.x + width >= board->arr_squars.front().size()) {  // Если нестыковка и выходим за границу, то правим точку как можем
+            pointLeftTopCorner.x--;
+        }
+        while (pointLeftTopCorner.y + height >= board->arr_squars.size()) {         // Если нестыковка и выходим за границу, то правим точку как можем
+            pointLeftTopCorner.y--;
+        }
+        std::vector<size_t>* vec = new std::vector<size_t>;
+        for (size_t i = pointLeftTopCorner.y; i < pointLeftTopCorner.y + height; i++) {
+            for (size_t j = pointLeftTopCorner.x; j < pointLeftTopCorner.x + width; j++) {
+                cells.push_back(Cell(i, j, i * board->arr_squars.front().size() + j));
             }
         }
-    }
+        Point mostTargetPoint;
 
-    PawnsPlayer(const Point &point_left_top_corner, const size_t width_board, const std::vector<size_t>* player_place) : count_items(player_place->size()) {
-        pawn_place = player_place;
-        pawns.reserve(count_items);
-        init_loc_pawn(player_place, width_board);
     }
+    cells_t cells;
+};
+
+/*Пешки игрока/AI */
+struct PawnsPlayer {
+    pawns_t pawns;
+    PlayerPlace* plaerPlace;
+    //const std::vector<size_t> *pawn_place;
+
+    void init_loc_pawn(const cells_t& cells_player) {
+        for (size_t i = 0; i < cells_player.size(); i++) {
+            pawns.push_back(Pawn(cells_player[i].x, cells_player[i].y, cells_player[i].n));
+        }
+    }
+    //void init_loc_pawn(const std::vector<size_t>* mapZonePlayer, const size_t width_board) {
+    //    for (size_t i = 0; i < mapZonePlayer->size(); i++) {
+    //        pawns.push_back(Pawn(mapZonePlayer->at(i) / width_board, mapZonePlayer->at(i) % width_board, mapZonePlayer->at(i)));
+    //    }
+    //}
+
+    //void init_right_bottom() {
+    //    for (size_t i = COUNT_CELLS_ROW - 1; i > COUNT_CELLS_ROW - 1 - COUNT_PAWNS_ROW_INIT; i--) {
+    //        for (size_t j = COUNT_CELLS_ROW - 1; j > COUNT_CELLS_ROW - 1 - COUNT_PAWNS_ROW_INIT; j--) {
+    //            pawns.push_back(Pawn(i, j, i * COUNT_CELLS_ROW + j));
+    //        }
+    //    }
+    //}
+
+    PawnsPlayer(const Point &point_left_top_corner, const PlayerPlace* player_place)  {
+        //pawn_place = player_place;
+        pawns.reserve(player_place->cells.size());
+        init_loc_pawn(player_place->cells);
+    }    
+    //PawnsPlayer(const Point &point_left_top_corner, const size_t width_board, const std::vector<size_t>* player_place) : count_items(player_place->size()) {
+    //    pawn_place = player_place;
+    //    pawns.reserve(count_items);
+    //    init_loc_pawn(player_place, width_board);
+    //}
 };
 
 //class Player {
@@ -156,43 +228,10 @@ private:
     std::vector<Observer*> _observers;
 };
 
+
 class GameModel : public Observable{
 
-    /*Игровая доска*/
-    struct Board {
-        Board(size_t count_items_side = COUNT_CELLS_ROW, float width_item = WIDTH_CELL) {
-            float tmp_x = 0;
-            float tmp_y = 0;
-            size_t counter = 0;
-            arr_squars.resize(count_items_side);
-            squars.resize(count_items_side * count_items_side);
-            for (size_t i = 0; i < count_items_side; i++) {
-                squars_t squarsTmp(count_items_side);
-                for (size_t j = 0; j < count_items_side; j++) {
-                    Square* squar = new Square(i, j, i*count_items_side + j);
-                    squar->leftTop.x = tmp_x;
-                    squar->leftTop.y = tmp_y;
 
-                    squar->rightTop.x = tmp_x + width_item;
-                    squar->rightTop.y = tmp_y;
-
-                    squar->rightBottom.x = tmp_x + width_item;
-                    squar->rightBottom.y = tmp_y + width_item;
-
-                    squar->leftBottom.x = tmp_x;
-                    squar->leftBottom.y = tmp_y + width_item;
-                    squars[squar->n] = squar;
-                    squarsTmp[j] = squar;
-                    tmp_y += width_item;
-                }
-                arr_squars[i] = squarsTmp;
-                tmp_x += width_item;
-                tmp_y = 0;
-            }      
-        }
-        squars_t squars;
-        arr_squars_t arr_squars;
-    };
     struct StateChoice {
         bool mousePressed = false;
         float pressedTime = 0;
@@ -210,6 +249,7 @@ public:
     Message message;
     Board *board;
     Barrier barrier;
+    PlayerPlace* playerPlace;
     std::vector<PawnsPlayer*> players_pawns;
 
     GameModel(const size_t width_side = COUNT_CELLS_ROW) {
@@ -238,8 +278,10 @@ public:
     left_top_corner - левая верхняя точка, начиная с которой будут расставляться фигуры
     width - количество фигур в ряд
     height - количество фигур в колонку*/
-    PawnsPlayer* createPawns(const Point &left_top_corner, const size_t width, const size_t height) {
-        PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, board->arr_squars.size(), createZonePlayer(left_top_corner, width, height));
+    //PawnsPlayer* createPawns(const Point &left_top_corner, const size_t width, const size_t height) {
+    PawnsPlayer* createPawns(const Point &left_top_corner, const PlayerPlace *player_place) {
+        PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, player_place);
+        //PawnsPlayer* player_pawns = new PawnsPlayer(left_top_corner, board->arr_squars.size(), createZonePlayer(left_top_corner, width, height));
         players_pawns.push_back(player_pawns);
         return player_pawns;
     }
@@ -251,8 +293,8 @@ public:
         }
     }
 
+
     PointAB findPaths(pawns_t &pawns) {
-        std::vector<std::vector<int>> mapPawns(COUNT_CELLS_ROW, std::vector<int>(COUNT_CELLS_ROW, 0));
 
         std::map<double, std::vector<size_t>> paths;
 
@@ -271,7 +313,7 @@ public:
                 if (!pawns[i].place)
                     for (size_t j = 0; j < numbersCellsWins.size(); j++) {
                         std::vector<size_t> path;
-                        double length = -1;
+                        int length = -1;
                         shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
                         if (length > 0)
                             paths[length] = path;
@@ -334,7 +376,6 @@ public:
     void selectCell() {
         notifyUpdate();
     }
-private:
 
     // TODO На данный момент всё завязано статически, ищутся ячейки ближайшие к правому нижнему углу
     /*Получить номера ячеек к которым искать пути и положить их в вектор*/
@@ -347,7 +388,7 @@ private:
         }
     }
 
-    void shortWay(const pawns_t &pawns, int from, int to, std::vector<size_t>& path, double& length) {
+    void shortWay(const pawns_t &pawns, int from, int to, std::vector<size_t>& path, int& length) {
         std::vector<Edge> vec_edge;
         calcVecEdge(pawns, vec_edge);
 
@@ -378,7 +419,7 @@ private:
         int t = number_vert_to_search; // искомая вершина
         //std::vector<size_t>* path = new std::vector<size_t>;
         if (d[t] == inf) {
-            fnt->printf(170, 10, HGETEXT_LEFT, "no path from %i to %i", v, t);
+            //fnt->printf(170, 10, HGETEXT_LEFT, "no path from %i to %i", v, t);
         }
         else {
             length = d[t];
@@ -389,15 +430,31 @@ private:
             }
             std::reverse(path.begin(), path.end());
 
-            fnt->printf(170, 10, HGETEXT_LEFT, "path from %i to %i :", v, t);
-            float axes_y = 25;
-            for (size_t i = 0; i < path.size(); ++i) {
-                fnt->printf(170, axes_y, HGETEXT_LEFT, "%i :", path.at(i));
-                axes_y += 13;
-            }
+            //fnt->printf(170, 10, HGETEXT_LEFT, "path from %i to %i :", v, t);
+            //float axes_y = 25;
+            //for (size_t i = 0; i < path.size(); ++i) {
+            //    fnt->printf(170, axes_y, HGETEXT_LEFT, "%i :", path.at(i));
+            //    axes_y += 13;
+            //}
         }
     }
 
+    /*Передвинуть пешку*/
+    int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, pawns_t& pawns) {
+        for (size_t i = 0; i < pawns.size(); i++) {
+            if (pawns[i].x == index_x && pawns[i].y == index_y) {
+                pawns[i].x = to_x;
+                pawns[i].y = to_y;
+                pawns[i].n = to_x * board->arr_squars.size() + to_y;
+                board->arr_squars[index_x][index_y]->filled = false;
+                board->arr_squars[to_x][to_y]->filled = true;
+                return i;
+            }
+        }
+        return -1;
+    }
+
+private:
     bool getPawnPlaceOfNumber(const size_t number_pawn, const pawns_t& pawns) {
         size_t index_x, index_y;
         getIndexs(number_pawn, index_x, index_y);
@@ -450,21 +507,6 @@ private:
             }
         }
 
-    }
-
-    /*Передвинуть пешку*/
-    int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, pawns_t& pawns) {
-        for (size_t i = 0; i < pawns.size(); i++) {
-            if (pawns[i].x == index_x && pawns[i].y == index_y) {
-                pawns[i].x = to_x;
-                pawns[i].y = to_y;
-                pawns[i].n = to_x * board->arr_squars.size() + to_y;
-                board->arr_squars[index_x][index_y]->filled = false;
-                board->arr_squars[to_x][to_y]->filled = true;
-                return i;
-            }
-        }
-        return -1;
     }
 
 };
@@ -563,13 +605,70 @@ class Controller
 public:
     Controller(GameModel* model_) : model(model_)
     {
-        player_pawns = model->createPawns(Point(1, 1), 3, 3);   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
+        player_pawns = model->createPawns(Point(1, 1), new PlayerPlace(model->board, Point(1, 1), 3, 3));   // Создать фигуры 3x3 и поместить их в клетку начиная с (1,1)
         model->arrangeFigures(player_pawns->pawns);             // Расставить фигуры на доске
         model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
     }
+
+    bool processGame() {
+        std::map<double, std::vector<size_t>> paths;
+
+        pawns_t& pawns = player_pawns->pawns;
+
+        size_t barrier_tolerance = 0;
+        std::vector<int> numbersCellsWins;
+        while (paths.empty()) {
+            if (barrier_tolerance != 0)
+                std::cout << "";
+            numbersCellsWins.clear();
+            if (barrier_tolerance == COUNT_CELLS_ROW) {
+                std::cout << "pad";
+                return false ;
+            }
+            model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
+            for (size_t i = 0; i < pawns.size(); i++) {
+                if (!pawns[i].place)
+                    for (size_t j = 0; j < numbersCellsWins.size(); j++) {
+                        std::vector<size_t> path;
+                        int length = -1;
+                        model->shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
+                        if (length > 0)
+                            paths[length] = path;
+                    }
+            }
+            barrier_tolerance++;
+            if (!paths.empty()) {
+                std::cout << "";
+                if (barrier_tolerance < model->barrier.currentLvlBarrier) {
+                    for (size_t i = 0; i < pawns.size(); i++)
+                        pawns[i].place = false;
+                    paths.clear();
+                    barrier_tolerance = 0;
+                    model->barrier.currentLvlBarrier = barrier_tolerance;
+                }
+            }
+        }
+
+        model->barrier.currentLvlBarrier = barrier_tolerance;
+
+        if (paths.size() == 1)
+            std::cout << "";
+
+        auto it = paths.begin()->second.begin();
+
+        int ret = model->move_pawn(*it/COUNT_CELLS_ROW, *it%COUNT_CELLS_ROW, *(it+1)/COUNT_CELLS_ROW, *(it+1)%COUNT_CELLS_ROW, pawns);
+        if (*it == 55)
+            std::cout << "";
+        if (paths.begin()->first == 1) { 
+            pawns[ret].place = true;        // Когда длина для последнего перемещения пешки была равна 1 значит пешка добралась до места назначения, делаем пометку
+        }
+        return true;
+    }
+
     void perform()
     {
-        model->findPaths(player_pawns->pawns);
+        //model->findPaths(player_pawns->pawns);
+        processGame();
         model->printString("hello MVC", 450, 350);
         if (hge->Input_IsMouseOver()) {
             model->updateCursor();
