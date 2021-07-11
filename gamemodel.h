@@ -1,26 +1,16 @@
 #ifndef GAMEMODEL_H
 #define GAMEMODEL_H
 
-#include "game.h"
+#include "types.h"
 
 
 class GameModel : public Observable {
-
-
-    struct StateChoice {
-        bool mousePressed = false;
-        float pressedTime = 0;
-        const float deltaForDifferent = 0.15f;
-        float mx, my;
-        int x, y;
-        bool choice = false;
-    };
     struct Message {
         float x, y;
         std::string str;
     };
 public:
-    StateChoice stateMouse;
+    StateMouse stateMouse;
     Message message;
     Board* board;
     Barrier barrier;
@@ -35,10 +25,10 @@ public:
     /* Создать фигуры
     player_place - это места пешек для старта игры (для одного игрока)
     */
-    PawnsPlayer* createPawns(const PlayerPlace* player_place);
+    PawnsPlayer* createPawns(const PlayerPlace* player_place, const int8_t id_player);
 
     /* Расставить фигуры на доске*/
-    void arrangeFigures(const pawns_t& pawns);
+    void arrangeFigures(const pawns_t& pawns, const int8_t plyer_side);
 
 
     PointAB findPaths(pawns_t& pawns);
@@ -46,20 +36,30 @@ public:
     /* Установить размер спрайта для пешки*/
     void setSizePawn(const float& w, const float& h);
 
-    void updateCursor();
-    void printString(std::string str, float x = 350, float y = 350);;
+    void moveCursore();
+    void printString(std::string str, float x = 450, float y = 350);;
     void selectCell();
 
     /* Получить номера ячеек к которым искать пути и положить их в вектор*/
     void getCellsToSearchPath(std::vector<int>& searchCells, size_t barrier_tolerance);
 
-    void getCellsTarget(cells_t& targetCells, const PlayerPlace& enemyPlace, size_t barrier_tolerance, bool inside = true);
+    void getCellsTarget(cells_t& targetCells, const PawnsPlayer& player, size_t barrier_tolerance, bool inside = true);
 
     /* Найти короткий путь из from в to*/
     void shortWay(const pawns_t& pawns, int from, int to, std::vector<size_t>& path, int& length);
 
     /* Передвинуть пешку*/
-    int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, pawns_t& pawns);
+    int move_pawn(const size_t index_x, const  size_t index_y, const  size_t to_x, const  size_t to_y, PawnsPlayer& player);
+
+    ///* узнать есть ли пешка на клетке из множества pawns*/
+    bool this_is_pawn(const pawns_t& pawns, const size_t x, const size_t y) const;
+
+    /* Отработать поведение при выборе пешки */
+    bool clickCursor(PawnsPlayer& player);
+
+    /* Для получения простого клика */
+    bool clickCursor();
+
 
 private:
     bool getPawnPlaceOfNumber(const size_t number_pawn, const pawns_t& pawns);

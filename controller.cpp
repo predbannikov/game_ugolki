@@ -1,9 +1,12 @@
 #include "controller.h"
 
-Controller::Controller(GameModel* model_) : model(model_)
+int8_t Controller::id_player;
+
+Controller::Controller(GameModel* model_, bool ai, Point startPoint, size_t width_place_pawn, size_t height_place_pawn) : model(model_), AI(ai)
 {
-    player_pawns = model->createPawns(new PlayerPlace(model->board, Point(0, 0), 3, 3));   // Создать фигуры 
-    model->arrangeFigures(player_pawns->pawns);             // Расставляем фигуры на доске
+    id_player++;
+    player_pawns = model->createPawns(new PlayerPlace(model->board, startPoint, width_place_pawn, height_place_pawn), id_player);   // Создать фигуры 
+    model->arrangeFigures(player_pawns->pawns, id_player);             // Расставляем фигуры на доске
     model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
     const Point& p = player_pawns->enemyPlace->most_interest_point;
     width = player_pawns->enemyPlace->width_board;
@@ -11,67 +14,19 @@ Controller::Controller(GameModel* model_) : model(model_)
 
     model->cell_debug = Cell(p.x, p.y, p.x + p.y * player_pawns->enemyPlace->width_board);
 
-}
-
-inline bool Controller::processGame() {
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
-    std::map<double, std::vector<size_t>> paths;
-
-    pawns_t& pawns = player_pawns->pawns;
-
-    size_t barrier_tolerance = 0;
-    std::vector<int> numbersCellsWins;
-    while (paths.empty()) {
-        if (barrier_tolerance != 0)
-            std::cout << "";
-        numbersCellsWins.clear();
-        if (barrier_tolerance == COUNT_CELLS_ROW) {
-            std::cout << "pad";
-            return false;
-        }
-        model->getCellsToSearchPath(numbersCellsWins, barrier_tolerance);    // Получаем ячейки для поиска
-        for (size_t i = 0; i < pawns.size(); i++) {
-            if (!pawns[i].place)
-                for (size_t j = 0; j < numbersCellsWins.size(); j++) {
-                    std::vector<size_t> path;
-                    int length = -1;
-                    model->shortWay(pawns, pawns[i].n, numbersCellsWins[j], path, length);
-                    if (length > 0)
-                        paths[length] = path;
-                }
-        }
-        barrier_tolerance++;
-        if (!paths.empty()) {
-            std::cout << "";
-            if (barrier_tolerance < model->barrier.currentLvlBarrier) {
-                for (size_t i = 0; i < pawns.size(); i++)
-                    pawns[i].place = false;
-                paths.clear();
-                barrier_tolerance = 0;
-                model->barrier.currentLvlBarrier = barrier_tolerance;
-            }
+    memory.resize(model->board->count_cells_row);
+    for (size_t i = 0; i < memory.size(); i++) {
+        memory[i].resize(model->board->count_cells_col);
+        for (size_t j = 0; j < memory.front().size(); j++) {
+            memory[i][j] = new Square(*model->board->arr_squars[i][j]);
         }
     }
-
-    model->barrier.currentLvlBarrier = barrier_tolerance;
-
-    if (paths.size() == 1)
-        std::cout << "";
-
-    auto it = paths.begin()->second.begin();
-
-    int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it + 1) % COUNT_CELLS_ROW, *(it + 1) / COUNT_CELLS_ROW, pawns);
-    if (*it == 55)
-        std::cout << "";
-    if (paths.begin()->first == 1) {
-        pawns[ret].place = true;        // Когда длина для последнего перемещения пешки была равна 1 значит пешка добралась до места назначения, делаем пометку
-    }
-    return true;
 }
+
 
 inline void Controller::getPaths(std::map<size_t, std::vector<size_t>>& paths, const cells_t& target_cells) {
     for (size_t i = 0; i < player_pawns->pawns.size(); i++) {
-        if (!player_pawns->pawns[i].place)
+        if (!player_pawns->pawns[i].place)                      // Если задача не выполнена 
             for (size_t j = 0; j < target_cells.size(); j++) {
                 std::vector<size_t> path;
                 int length = -1;
@@ -83,43 +38,173 @@ inline void Controller::getPaths(std::map<size_t, std::vector<size_t>>& paths, c
 
 }
 
-inline void Controller::process() {
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
-    std::map<size_t, std::vector<size_t>> paths;
-    size_t barrier_tolerance = 0;
-    cells_t targetCells;
-    model->getCellsTarget(targetCells, *player_pawns->enemyPlace, barrier_tolerance, true);
-    getPaths(paths, targetCells);
-
-    std::vector<size_t> path = paths.begin()->second;
-    model->cells_debug.clear();
-    for (size_t i = 0; i < path.size(); i++) {
-        model->cells_debug.push_back(Cell(path[i] % width, path[i] / width, path[i]));
-    }
+inline bool Controller::nextSet(int* a, int n, int m)
+{
+    int j = m - 2;
+    while (j >= 0 && a[j] == n)
+        j--;
+    if (j < 0)
+        return false;
+    if (a[j] >= n)
+        j--;
+    a[j]++;
+    if (j == m - 1)
+        return true;
+    for (int k = j + 1; k < m; k++)
+        a[k] = 1;
+    return true;
 }
 
- void Controller::perform()
+bool Controller::upperStage(size_t& stage)
 {
-    //model->findPaths(player_pawns->pawns);
+    stage++;
+    if (stage > range)
+        return false;
+    return true;
+}
 
-    int barrier = 2;
-    model->getCellsTarget(model->cells_target, *player_pawns->enemyPlace, barrier, true);
+bool Controller::perform()
+{
+    bool clickState = false;
+    if (!AI) {
+        if (model->clickCursor(*player_pawns))
+            clickState = true;
+        if (model->stateMouse.rightButton) {
+            clickState = true;
+        }
+    }
+    else {
+        /* Тут будем хратиться найденные пути в отсортированном порядке по длине, и обновляться после каждой вхождения в цикл */
+        std::map<size_t, std::vector<size_t>> paths;
+        std::map<size_t, std::vector<size_t>> tmpPaths;
+        int smth_digit = 0;
+        int n, m, * a;
+        n = 4;  // Набор
+        m = 4;  // Количество
+        int h = n > m ? n : m; // размер массива а выбирается как max(n,m)
+        a = new int[h];
+        for (size_t i = 0; i < h; i++)
+            a[i] = 1;
+        std::string str;
+        while (nextSet(a, n, m)) {
+            for (int i = 0; i < m; i++) {
+                combinatAlgo(tmpPaths, a);
+                paths.merge(tmpPaths);
+                tmpPaths.clear();
+            }
+        }
+        //model->printString(str);
 
-    process();
-    //processGame();
-    std::string points_str = player_pawns->playerPlace->str;
-    model->printString(points_str, 450, 350);
+        if (!paths.empty()) {
+            auto it = paths.begin()->second.begin();
+            int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it + 1) % COUNT_CELLS_ROW, *(it + 1) / COUNT_CELLS_ROW, *player_pawns);
+            if (*it == 55)
+                std::cout << "";
+            if (paths.begin()->first == 1)
+                player_pawns->pawns[ret].place = true;
+        }
+        clickState = true;
+    }
 
-
-
-
-    std::string str = points_str;
     //model->printString(str);
     if (temp == 1)
         std::cout << "stop";
 
-    if (hge->Input_IsMouseOver()) {
-        model->updateCursor();
-    }
+
     temp++;
+    return clickState;
+}
+
+void Controller::combinatAlgo(std::map<size_t, std::vector<size_t>>& paths, int *sequence)
+{
+    bool rationalStep = true;
+    int barrier = 0;    // Начинаем с допускаемым отступом в 0 шагов
+    cells_t cellsTarget;
+
+    /* Приоритет поиска маршрута, ищем сначала внутри области PawnPlayer.enemyPlace (Область где расположены пешки врага)
+    * когда внутри этой области отсутствуют пешки, сбрасываем барьер на 0 и ищем маршрут по направлению включая область за пределами PawnPlayer.enemyPlace
+    * так нужно для случая когда точки врага изначально располагаются не в квадрате а в прямоугольнике */
+    bool inside = true;
+
+    size_t first_algo = 1;
+    size_t second_algo = 2;
+    size_t third_algo = 3;
+    size_t fourth_algo = 4;
+    size_t stage = 0;
+
+    /* Если у нас нет доступных маршрутов продолжаем цикл поиска */
+    while (paths.empty()) {
+
+        /* Получаем ячейки которые не заняты по отношению к точке MIP (наиболее интересующей точке, она вычисляется на этапе расстановки пешек)
+        barrier - указывает допускаемый отступ от самой точки (во все стороны)*/
+        if (first_algo == *(sequence + stage)) {
+            inside = true;
+            model->getCellsTarget(cellsTarget, *player_pawns, barrier, inside);
+        }
+        if (third_algo == *(sequence + stage)) {
+            inside = false;
+            model->getCellsTarget(cellsTarget, *player_pawns, barrier, inside);
+        }
+
+        /* Получаем доступные пути к интересующим точкам*/
+        getPaths(paths, cellsTarget);
+
+        barrier++;
+        if (barrier > player_pawns->enemyPlace->height_place && barrier > player_pawns->enemyPlace->width_place && inside) {
+            barrier = 0;
+            if (upperStage(stage))
+                break;
+        }
+
+        if (second_algo == *(sequence + stage)) {
+            if (!checkMem()) {
+                player_pawns->resetPawns();
+                saveMem();
+                if (upperStage(stage))
+                    break;
+                continue;
+            }
+        }
+        // TODO
+        /* обнаружение обратного хода - бесполезный ход, можно поискать маршруты получше, */
+        if (third_algo == *(sequence + stage)) {
+            int dist = 0;
+            if (!paths.empty()) {
+                do {
+                    auto it = paths.begin()->second.begin();
+                    dist = player_pawns->distanceToMIP(*it, *(it + 1));
+                    if (dist > 0) {
+                        std::cout << "stop";
+                        paths.erase(paths.begin());
+                    } 
+                } while (!paths.empty() && dist > 0);
+                if (upperStage(stage))
+                    break;
+            }
+        }
+
+        // Если барьер стал больше ширины доски, значит нет доступных ходов, выходим из поиска
+        if (barrier > player_pawns->playerPlace->width_board) {
+            if (upperStage(stage))
+                break;
+        }
+    }
+}
+
+inline bool Controller::checkMem() {
+    bool check = true;
+    for (auto cell : player_pawns->enemyPlace->cells) {
+        if (memory[cell.y][cell.x]->fillType != model->board->arr_squars[cell.y][cell.x]->fillType) {
+            check = false;
+        }
+    }
+    return check;
+}
+
+/* Сохраним в памяти состояние области врага */
+
+inline void Controller::saveMem() {
+    for (auto cell : player_pawns->enemyPlace->cells) {
+        memory[cell.y][cell.x]->fillType = model->board->arr_squars[cell.y][cell.x]->fillType;
+    }
 }

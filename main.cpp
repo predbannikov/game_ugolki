@@ -1,23 +1,24 @@
 #include <stdio.h>
 #include <iostream>
-#include "view.h"
-#include "controller.h"
-#include "gamemodel.h"
+#include "game.h"
 
 HGE* hge = nullptr;
+hgeFont* fnt = nullptr;
 
-GameModel* game;
-ViewGame* view;
-ViewCursor* cursor;
-Controller* controller;
-ViewText* text;
-ViewBoard* viewBoard;
-ViewPawns* viewPawns;
-ViewPlaceEnemy* veiwPlaceEnemy;
-ViewPlaceDebug* veiwPlaceDebug;
-ViewCellsTarget* veiwCellsTarget;
-ViewPointDebug* veiwPointDebug;
-hgeFont* fnt;
+Game* game = nullptr;
+
+//GameModel* game;
+//ViewGame* view;
+//ViewCursor* cursor;
+//Controller* controller;
+//ViewText* text;
+//ViewBoard* viewBoard;
+//ViewPawns* viewPawns;
+//ViewPlaceEnemy* veiwPlaceEnemy;
+//ViewPlaceDebug* veiwPlaceDebug;
+//ViewCellsTarget* veiwCellsTarget;
+//ViewPointDebug* veiwPointDebug;
+//hgeFont* fnt;
 
 
 
@@ -50,9 +51,9 @@ bool render_func() {
     hge->Gfx_BeginScene();
     hgeColorRGB hgeCol(0.0, 0.0, 0.0, 1.0);
     hge->Gfx_Clear(hgeCol.GetHWColor());
-    //doska->update();
 
-    controller->perform();
+    //controller->perform();
+    game->updater();
 
 
     hge->Gfx_EndScene();
@@ -96,22 +97,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 void init_window() {
     fnt = new hgeFont("G:\\projects\\work\\voroneg\\kvakvs-hge-4f237b4\\tutorials\\precompiled\\font2.fnt");
-    game = new GameModel;
-    view = new ViewGame(game);
-    viewPawns = new ViewPawns(game);
-    viewBoard = new ViewBoard(game);
-    veiwPlaceEnemy = new ViewPlaceEnemy(game);
-    veiwPlaceDebug = new ViewPlaceDebug(game);
-    veiwCellsTarget = new ViewCellsTarget(game);
-    veiwPointDebug = new ViewPointDebug(game);
-    text = new ViewText(game);
-    cursor = new ViewCursor(game);      // курсор добавлять последним чтоб отрисовывался поверх 
-    controller = new Controller(game);
+    game = new Game;
+    //game->createPlayers(1);
+    //game->start();
+    //game = new GameModel;
+    //view = new ViewGame(game);
+    //viewPawns = new ViewPawns(game);
+    //viewBoard = new ViewBoard(game);
+    //veiwPlaceEnemy = new ViewPlaceEnemy(game);
+    //veiwPlaceDebug = new ViewPlaceDebug(game);
+    //veiwCellsTarget = new ViewCellsTarget(game);
+    //veiwPointDebug = new ViewPointDebug(game);
+    //text = new ViewText(game);
+    //cursor = new ViewCursor(game);      // курсор добавлять последним чтоб отрисовывался поверх 
+    //controller = new Controller(game);
     //doska = new Game(50);
 }
 
 void done_window() {
     //delete spr_cursor;
+    delete game;
     delete fnt;
 }
 

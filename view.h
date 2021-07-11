@@ -3,7 +3,9 @@
 
 #include "observ.h"
 #include "gamemodel.h"
-#include "game.h"
+#include "types.h"
+
+extern hgeFont* fnt;
 
 struct ViewPlaceDebug : public Observer {
     ViewPlaceDebug(GameModel* model) {
@@ -18,8 +20,8 @@ struct ViewPlaceDebug : public Observer {
         const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
         const float dwBoarder = width_cell - spr_cell->GetWidth();
         const float dhBoarder = width_cell - spr_cell->GetHeight();
-        for (int i = 0; i < cells.size(); i++) {
-            spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+        for (size_t i = 0; i < cells.size(); i++) {
+            spr_cell->Render(static_cast<float>(dwBoarder / 2. + cells[i].x * width_cell), static_cast<float>(dhBoarder / 2. + cells[i].y * width_cell));
         }
 
     }
@@ -41,7 +43,7 @@ struct ViewPointDebug : public Observer {
         const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
         const float dwBoarder = width_cell - spr_cell->GetWidth();
         const float dhBoarder = width_cell - spr_cell->GetHeight();
-        spr_cell->Render(dwBoarder / 2. + cell.x * width_cell, dhBoarder / 2. + cell.y * width_cell);
+        spr_cell->Render(static_cast<float>(dwBoarder / 2. + cell.x * width_cell), static_cast<float>(dhBoarder / 2. + cell.y * width_cell));
     }
     hgeSprite* spr_cell;
     GameModel* game;
@@ -60,8 +62,8 @@ struct ViewCellsTarget : public Observer {
         const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
         const float dwBoarder = width_cell - spr_cell->GetWidth();
         const float dhBoarder = width_cell - spr_cell->GetHeight();
-        for (int i = 0; i < cells.size(); i++) {
-            spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+        for (size_t i = 0; i < cells.size(); i++) {
+            spr_cell->Render(static_cast<float>(dwBoarder / 2. + cells[i].x * width_cell), static_cast<float>(dhBoarder / 2. + cells[i].y * width_cell));
         }
 
     }
@@ -83,8 +85,8 @@ struct ViewBoard : public Observer {
 
     virtual void update() {
         const arr_squars_t& squars = game->board->arr_squars;
-        for (int i = 0; i < squars.size(); i++) {
-            for (int j = 0; j < squars.size(); j++) {
+        for (size_t i = 0; i < squars.size(); i++) {
+            for (size_t j = 0; j < squars.size(); j++) {
                 renderQuad(squars[i][j]->leftTop, squars[i][j]->rightTop, squars[i][j]->rightBottom, squars[i][j]->leftBottom, 0xFFFFFFFF);
                 fnt->printf(squars[i][j]->leftTop.x, squars[i][j]->leftTop.y, HGETEXT_LEFT, " %i", squars[i][j]->n);               // TODO перенести во вьюшку
             }
@@ -101,13 +103,15 @@ struct ViewPawns : public Observer {
 
 
     virtual void update() {
-        const pawns_t& pawns = game->players_pawns.front()->pawns;
-        const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
-        const float dwBoarder = width_cell - pawns.front().spr_pawn->GetWidth();
-        const float dhBoarder = width_cell - pawns.front().spr_pawn->GetHeight();
-        for (int i = 0; i < pawns.size(); i++) {
-            pawns[i].spr_pawn->Render(dwBoarder / 2. + pawns[i].x * width_cell, dhBoarder / 2. + pawns[i].y * width_cell);
+        for (auto player : game->players_pawns) {
+            const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
+            const float dwBoarder = width_cell - player->pawns.front().spr_pawn->GetWidth();
+            const float dhBoarder = width_cell - player->pawns.front().spr_pawn->GetHeight();
+            for (size_t i = 0; i < player->pawns.size(); i++) {
+                player->pawns[i].spr_pawn->Render(static_cast<float>(dwBoarder / 2. + player->pawns[i].x * width_cell), static_cast<float>(dhBoarder / 2. + player->pawns[i].y * width_cell));
+            }
         }
+        //const pawns_t& pawns = game->players_pawns.front()->pawns;
     }
     GameModel* game;
 };
@@ -140,7 +144,23 @@ public:
     ~ViewCursor() {
         delete spr_cursor;
     }
+    void renderCell(size_t i, size_t j, size_t border = 2, int color = 0x00FF0000) {
+        
+        hge->Gfx_RenderLine(game->board->arr_squars[i][j]->leftTop.x + border, game->board->arr_squars[i][j]->leftTop.y+ border, game->board->arr_squars[i][j]->rightTop.x- border, game->board->arr_squars[i][j]->rightTop.y+ border, color);
+        hge->Gfx_RenderLine(game->board->arr_squars[i][j]->rightTop.x - border, game->board->arr_squars[i][j]->rightTop.y + border, game->board->arr_squars[i][j]->rightBottom.x - border, game->board->arr_squars[i][j]->rightBottom.y - border, color);
+        hge->Gfx_RenderLine(game->board->arr_squars[i][j]->rightBottom.x - border, game->board->arr_squars[i][j]->rightBottom.y - border, game->board->arr_squars[i][j]->leftBottom.x + border, game->board->arr_squars[i][j]->leftBottom.y - border, color);
+        hge->Gfx_RenderLine(game->board->arr_squars[i][j]->leftBottom.x + border, game->board->arr_squars[i][j]->leftBottom.y - border, game->board->arr_squars[i][j]->leftTop.x + border, game->board->arr_squars[i][j]->leftTop.y + border, color);
+        game->message.str = std::string(std::to_string(i) + " : " + std::to_string(j));
+        game->message.x = 450;
+        game->message.y = 450;
+
+    }
+
     virtual void update() {
+        if (game->stateMouse.choice) {
+            //fnt->printf(10, 70, HGETEXT_LEFT, "x=%d y=%d", game->stateMouse.x, game->stateMouse.y);
+            renderCell(game->stateMouse.y, game->stateMouse.x, 2, 0xFFFF00FF);
+        }
         spr_cursor->Render(game->stateMouse.mx, game->stateMouse.my);
     }
     GameModel* game;
@@ -153,7 +173,7 @@ public:
         game->addObserver(this);
     }
     virtual void update() {
-        fnt->printf(game->message.x, game->message.y, HGETEXT_LEFT, "Message: %s %f", game->message.str.c_str(), hge->Timer_GetTime());
+        fnt->printf(game->message.x, game->message.y, HGETEXT_LEFT, "Message:%f \n%s ", hge->Timer_GetTime(), game->message.str.c_str());
     }
     GameModel* game;
 };
@@ -164,7 +184,7 @@ public:
         game = model;
         game->addObserver(this);
         spr_cell = new hgeSprite(0, 100, 100, 35, 35);
-        spr_cell->SetColor(0x55000077);
+        spr_cell->SetColor(0x33000077);
     }
 
     virtual void update() {
@@ -173,8 +193,8 @@ public:
             const float width_cell = game->board->squars.front()->rightTop.x - game->board->squars.front()->leftTop.x;
             const float dwBoarder = width_cell - spr_cell->GetWidth();
             const float dhBoarder = width_cell - spr_cell->GetHeight();
-            for (int i = 0; i < cells.size(); i++) {
-                spr_cell->Render(dwBoarder / 2. + cells[i].x * width_cell, dhBoarder / 2. + cells[i].y * width_cell);
+            for (size_t i = 0; i < cells.size(); i++) {
+                spr_cell->Render(static_cast<float>(dwBoarder / 2. + cells[i].x * width_cell), static_cast<float>(dhBoarder / 2. + cells[i].y * width_cell));
             }
         }
 

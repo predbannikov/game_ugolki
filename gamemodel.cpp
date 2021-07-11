@@ -2,6 +2,7 @@
 
 GameModel::GameModel(const size_t width_side) {
     board = new Board(width_side);
+    cell_debug = Cell(-1, -1, -1);
 }
 
 /* Создать фигуры
@@ -9,17 +10,22 @@ left_top_corner - левая верхняя точка, начиная с кот
 width - количество фигур в ряд
 height - количество фигур в колонку*/
 
-PawnsPlayer* GameModel::createPawns(const PlayerPlace* player_place) {
-    PawnsPlayer* player_pawns = new PawnsPlayer(player_place);
+PawnsPlayer* GameModel::createPawns(const PlayerPlace* player_place, const int8_t id_player) {
+    int32_t color;
+    if (players_pawns.empty())
+        color = 0xFFBBBBBB;
+    else
+        color = 0xFF1111FF;
+    PawnsPlayer* player_pawns = new PawnsPlayer(player_place, color, id_player);
     players_pawns.push_back(player_pawns);
     return player_pawns;
 }
 
 /* Расставить фигуры на доске*/
 
-void GameModel::arrangeFigures(const pawns_t& pawns) {
+void GameModel::arrangeFigures(const pawns_t& pawns, const int8_t plyer_side) {
     for (size_t i = 0; i < pawns.size(); i++) {
-        board->arr_squars[pawns[i].y][pawns[i].x]->filled = true;
+        board->arr_squars[pawns[i].y][pawns[i].x]->fillType = plyer_side;
     }
 }
 
@@ -69,18 +75,15 @@ inline PointAB GameModel::findPaths(pawns_t& pawns) {
     auto it = paths.begin()->second.begin();
     getIndexs(*it, x, y);
     getIndexs(*(it + 1), x_to, y_to);
-    //directStepPawn(*it, *(it + 1));
-    int ret = move_pawn(x, y, x_to, y_to, pawns);
+
+    //int ret = move_pawn(x, y, x_to, y_to, pawns);
     if (*it == 55)
         std::cout << "";
-    if (paths.begin()->first < 1.1f) {
-        pawns[ret].place = true;
-    }
-
-    //if (checkWin()) {
-    //    std::cout << "WIN";
-    //    cycle = false;;
+    //if (paths.begin()->first < 1.1f) {
+    //    pawns[ret].place = true;
     //}
+
+
     return PointAB();
 }
 
@@ -93,7 +96,7 @@ void GameModel::setSizePawn(const float& w, const float& h) {
         }
 }
 
-void GameModel::updateCursor() {
+void GameModel::moveCursore() {
     hge->Input_GetMousePos(&stateMouse.mx, &stateMouse.my);
     notifyUpdate();
 }
@@ -115,17 +118,17 @@ inline void GameModel::selectCell() {
 void GameModel::getCellsToSearchPath(std::vector<int>& searchCells, size_t barrier_tolerance) {
     for (int i = board->arr_squars.size() - 1; i >= board->arr_squars.size() - barrier_tolerance; i--) {
         for (int j = board->arr_squars.size() - 1; j >= board->arr_squars.size() - barrier_tolerance; j--) {
-            if (!board->arr_squars[i][j]->filled)
+            if (board->arr_squars[i][j]->fillType == 0)
                 searchCells.push_back(i * board->arr_squars.size() + j);
         }
     }
 }
 
-void GameModel::getCellsTarget(cells_t& targetCells, const PlayerPlace& enemyPlace, size_t barrier_tolerance, bool inside) {
+void GameModel::getCellsTarget(cells_t& targetCells, const PawnsPlayer& player, size_t barrier_tolerance, bool inside) {
     targetCells.clear();
-    size_t width = enemyPlace.width_board;
-    size_t height = enemyPlace.height_board;
-    Point t = enemyPlace.most_interest_point;
+    size_t width = player.enemyPlace->width_board;
+    size_t height = player.enemyPlace->height_board;
+    Point t = player.enemyPlace->most_interest_point;
 
     std::vector<std::vector<size_t> > map(height, std::vector<size_t>(width, 0));
     std::stack<std::pair<int, int>>stackCells;
@@ -149,27 +152,22 @@ void GameModel::getCellsTarget(cells_t& targetCells, const PlayerPlace& enemyPla
     }
 
     if (inside) {
-        const cells_t& cells = enemyPlace.cells;
+        const cells_t& cells = player.enemyPlace->cells;
         for (size_t i = 0; i < cells.size(); i++) {
-            if (map[cells[i].y][cells[i].x] == 1 && !board->arr_squars[cells[i].y][cells[i].x]->filled) {
+            if (map[cells[i].y][cells[i].x] == 1 && !board->arr_squars[cells[i].y][cells[i].x]->fillType) {
                 targetCells.push_back(Cell(cells[i].x, cells[i].y, cells[i].n));
             }
         }
     }
     else {
-        for (size_t i = 0; i < width; i++) {
-            for (size_t j = 0; j < height; j++) {
-                if (map[i][j] == 1 && !board->arr_squars[i][j]->filled) {
-                    targetCells.push_back(Cell(j, i, j * height + i));
+        for (size_t i = 0; i < height; i++) {
+            for (size_t j = 0; j < width; j++) {
+                if (map[i][j] == 1 && !board->arr_squars[i][j]->fillType) {
+                    targetCells.push_back(Cell(j, i, i * height + j));
                 }
             }
         }
     }
-
-
-
-
-    notifyUpdate();
 }
 
 void GameModel::shortWay(const pawns_t& pawns, int from, int to, std::vector<size_t>& path, int& length) {
@@ -216,18 +214,165 @@ void GameModel::shortWay(const pawns_t& pawns, int from, int to, std::vector<siz
 
 /* Передвинуть пешку*/
 
-inline int GameModel::move_pawn(const size_t index_x, const size_t index_y, const size_t to_x, const size_t to_y, pawns_t& pawns) {
-    for (size_t i = 0; i < pawns.size(); i++) {
-        if (pawns[i].x == index_x && pawns[i].y == index_y) {
-            pawns[i].x = to_x;
-            pawns[i].y = to_y;
-            pawns[i].n = to_y * board->arr_squars.size() + to_x;
-            board->arr_squars[index_y][index_x]->filled = false;
-            board->arr_squars[to_y][to_x]->filled = true;
+inline int GameModel::move_pawn(const size_t index_x, const size_t index_y, const size_t to_x, const size_t to_y, PawnsPlayer& player) {
+    for (size_t i = 0; i < player.pawns.size(); i++) {
+        if (player.pawns[i].x == index_x && player.pawns[i].y == index_y) {
+            player.pawns[i].x = to_x;
+            player.pawns[i].y = to_y;
+            player.pawns[i].n = to_y * board->arr_squars.size() + to_x;
+            board->arr_squars[index_y][index_x]->fillType = 0;
+            board->arr_squars[to_y][to_x]->fillType = player.side;
             return i;
         }
     }
     return -1;
+}
+
+
+///* узнать есть ли пешка на клетке из множества pawns*/
+
+inline bool GameModel::this_is_pawn(const pawns_t& pawns, const size_t x, const size_t y) const {
+    for (size_t i = 0; i < pawns.size(); i++) {
+        if (pawns[i].x == x && pawns[i].y == y)
+            return true;
+    }
+    return false;
+}
+
+bool GameModel::clickCursor() {
+    bool choice = false;
+    float mx, my;
+    hge->Input_GetMousePos(&mx, &my);
+    if (mx > 0 && mx < board->width_item_cell * board->count_cells_row && my > 0 && my < board->width_item_cell * board->count_cells_col) {
+        int index_x, index_y;
+        index_x = mx / board->width_item_cell;
+        index_y = my / board->width_item_cell;
+
+        if (hge->Input_GetKeyState(HGEK_RBUTTON)) {
+            int index_x_r, index_y_r;
+            index_x_r = mx / board->width_item_cell;
+            index_y_r = my / board->width_item_cell;
+            stateMouse.rightButton = true;
+        }
+        else {
+            stateMouse.rightButton = false;
+        }
+        if (hge->Input_GetKeyState(HGEK_LBUTTON)) {
+            if (!stateMouse.choice) {
+                if (!stateMouse.mousePressed ) {
+                    stateMouse.pressedTime = hge->Timer_GetTime();
+                    stateMouse.x = index_x;
+                    stateMouse.y = index_y;
+                    stateMouse.mousePressed = true;
+                    cells_target.push_back(Cell(index_x, index_y, board->count_cells_col * index_y + index_x));
+                }
+                else {
+                    cells_target.clear();
+                }
+            }
+            else {
+                if (!stateMouse.mousePressed) {
+                    stateMouse.pressedTime = hge->Timer_GetTime();
+                    stateMouse.mousePressed = true;
+                }
+                else {
+
+                }
+            }
+        }
+        else {
+            if (stateMouse.mousePressed) {
+                stateMouse.mousePressed = false;
+                stateMouse.pressedTime = hge->Timer_GetTime() - stateMouse.pressedTime;
+                if (stateMouse.pressedTime < stateMouse.deltaForDifferent) {
+                    if (stateMouse.choice) {
+                        choice = true;
+                    }
+                    stateMouse.choice = !stateMouse.choice;
+                }
+            }
+            else {
+                if (stateMouse.choice) {
+                    cells_target.clear();
+                    for (size_t i = stateMouse.y; i <= index_y; i++) {
+                        for (size_t j = stateMouse.x; j <= index_x; j++) {
+                            cells_target.push_back(Cell(j, i, board->count_cells_col * i + j));
+                        }
+                    }                
+                }
+
+            }
+        }
+    }
+    notifyUpdate();
+    return choice;
+}
+
+bool GameModel::clickCursor(PawnsPlayer& player)
+{
+    bool choice = false;
+    float mx, my;
+    hge->Input_GetMousePos(&mx, &my);
+    if (mx > 0 && mx < board->width_item_cell * board->count_cells_row && my > 0 && my < board->width_item_cell * board->count_cells_col) {
+        int index_x, index_y;
+        index_x = mx / board->width_item_cell;
+        index_y = my / board->width_item_cell;
+
+        if (hge->Input_GetKeyState(HGEK_RBUTTON)) {
+            int index_x_r, index_y_r;
+            index_x_r = mx / board->width_item_cell;
+            index_y_r = my / board->width_item_cell;
+            stateMouse.rightButton = true;
+        }
+        else {
+            stateMouse.rightButton = false;
+        }
+        if (hge->Input_GetKeyState(HGEK_LBUTTON)) {
+            if (!stateMouse.choice) {
+                if (!stateMouse.mousePressed && this_is_pawn(player.pawns, index_x, index_y)) {
+                    stateMouse.pressedTime = hge->Timer_GetTime();
+                    stateMouse.x = index_x;
+                    stateMouse.y = index_y;
+                    stateMouse.mousePressed = true;
+                }
+                else {
+                }
+            }
+            else {
+                if (!stateMouse.mousePressed) {
+                    stateMouse.pressedTime = hge->Timer_GetTime();
+                    stateMouse.mousePressed = true;
+                }
+                else {
+
+                }
+            }
+        }
+        else {
+            if (stateMouse.mousePressed) {
+                stateMouse.mousePressed = false;
+                stateMouse.pressedTime = hge->Timer_GetTime() - stateMouse.pressedTime;
+                if (stateMouse.pressedTime < stateMouse.deltaForDifferent) {
+                    if (stateMouse.choice) {
+                        if (index_x == stateMouse.x - 1 && index_y == stateMouse.y ||
+                            index_x == stateMouse.x + 1 && index_y == stateMouse.y ||
+                            index_x == stateMouse.x && index_y == stateMouse.y - 1 ||
+                            index_x == stateMouse.x && index_y == stateMouse.y + 1) {
+                            if (!board->arr_squars[index_y][index_x]->fillType) {
+                                move_pawn(stateMouse.x, stateMouse.y, index_x, index_y, player);
+                                choice = true;
+                            }
+                        }
+                    }
+                    stateMouse.choice = !stateMouse.choice;
+                }
+            }
+            else {
+            }
+        }
+    }
+    notifyUpdate();
+    return choice;
 }
 
 inline bool GameModel::getPawnPlaceOfNumber(const size_t number_pawn, const pawns_t& pawns) {
@@ -262,19 +407,19 @@ inline void GameModel::calcVecEdge(const pawns_t& pawns, std::vector<Edge>& edge
 
             if (getPawnPlaceOfNumber(ed.a, pawns))
                 continue;
-            if (j - 1 >= 0 && !board->arr_squars[i][j - 1]->filled) {
+            if (j - 1 >= 0 && !board->arr_squars[i][j - 1]->fillType) {
                 ed.b = j - 1 + i * board->arr_squars.size();
                 edge.push_back(ed);
             }
-            if (j + 1 < board->arr_squars.size() && !board->arr_squars[i][j + 1]->filled) {
+            if (j + 1 < board->arr_squars.size() && !board->arr_squars[i][j + 1]->fillType) {
                 ed.b = i * board->arr_squars.size() + j + 1;
                 edge.push_back(ed);
             }
-            if (i - 1 >= 0 && !board->arr_squars[i - 1][j]->filled) {
+            if (i - 1 >= 0 && !board->arr_squars[i - 1][j]->fillType) {
                 ed.b = (i - 1) * board->arr_squars.size() + j;
                 edge.push_back(ed);
             }
-            if (i + 1 < board->arr_squars.size() && !board->arr_squars[i + 1][j]->filled) {
+            if (i + 1 < board->arr_squars.size() && !board->arr_squars[i + 1][j]->fillType) {
                 ed.b = (i + 1) * board->arr_squars.size() + j;
                 edge.push_back(ed);
             }
