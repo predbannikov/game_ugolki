@@ -7,24 +7,26 @@
 #include "view.h"
 
 
+/* Класс инкапсулирующий различные объекты в одно целое, следит за созданием удалением объектов */
 
 class Game {
-    GameModel* model;
-    ViewGame* view;
-    ViewCursor* cursor;
-    ViewText* text;
-    ViewBoard* viewBoard;
-    ViewPawns* viewPawns;
-    ViewPlaceEnemy* viewPlaceEnemy;
-    ViewPlaceDebug* viewPlaceDebug;
-    ViewCellsTarget* viewCellsTarget;
-    ViewPointDebug* viewPointDebug;
-    Controller* controller;
-    Controller* controller2;
+    GameModel* model = nullptr;
+    ViewGame* view = nullptr;
+    ViewCursor* cursor = nullptr;
+    ViewText* text = nullptr;
+    ViewBoard* viewBoard = nullptr;
+    ViewPawns* viewPawns = nullptr;
+    ViewPlaceEnemy* viewPlaceEnemy = nullptr;
+    ViewPlaceDebug* viewPlaceDebug = nullptr;
+    ViewCellsTarget* viewCellsTarget = nullptr;
+    ViewPointDebug* viewPointDebug = nullptr;
+    Controller* controller = nullptr;
+    Controller* controller2 = nullptr;
     //hgeFont* fnt;
     bool launched = false;
 
     enum STATE_ORDER_STEP {STATE_STEP_ONE, STATE_STEP_TWO} state_order_state = STATE_STEP_ONE;
+    enum STATE_GAME {STATE_GAME_LAUNCH, STATE_GAME_PROCESS, STATE_GAME_END} state_game = STATE_GAME_LAUNCH;
 
 public:
     Game() {
@@ -38,20 +40,24 @@ public:
         viewBoard = new ViewBoard(model);
         text = new ViewText(model);
         cursor = new ViewCursor(model);      // курсор добавлять последним чтоб отрисовывался поверх 
-        // TODO создать контроллер с указанием кто им будет играть
-        // 
     }
     void createPlayers(size_t width, size_t heigth, Point p1, size_t count_player_human = 1) {
         controller = new Controller(model, true, p1, width, heigth);
-        Cell cell = model->players_pawns.front()->enemyPlace->cells.back();
-        Point secondPlayer = Point(cell.x, cell.y);
-        controller2 = new Controller(model, false, secondPlayer, width, heigth);
+        if (count_player_human) {
+            Cell cell = model->players_pawns.front()->enemyPlace->cells.back();
+            Point secondPlayer = Point(cell.x, cell.y);
+            controller2 = new Controller(model, false, secondPlayer, width, heigth);
+        }
     }
 
 
     void updater() {
         model->moveCursore();
-        if (!launched && hge->Input_IsMouseOver()) {
+        bool win = false;
+        switch (state_game)
+        {
+        case Game::STATE_GAME_LAUNCH:
+            model->printString("select an area for the location of the enemy, and without crossing the center", 100, 500);
             if (model->clickCursor()) {
                 if (model->cells_target.empty()) {
                     return;
@@ -68,24 +74,37 @@ public:
                     return;
 
 
-                createPlayers(width, height, target_point);
-                launched = true;
+                createPlayers(width, height, target_point, 1);      // 1 - добавить игрока, 0 - без игрока
+                state_game = STATE_GAME_PROCESS;
             }
+            break;
+        case Game::STATE_GAME_PROCESS:
+            model->printString("right click skips moves ", 100, 500);
 
-        }
-        if (launched) {
             if (state_order_state == STATE_STEP_ONE) {
-                if (controller->perform()) {
+                if (controller->perform(win)) {
                     state_order_state = STATE_STEP_TWO;
-                }
-            } else {
-                if (controller2->perform()) {
-                    state_order_state = STATE_STEP_ONE;
+                    if (win) {
+                        state_game = STATE_GAME_END;
+                    }
                 }
             }
-        }
-        else {
-            model->printString("choose number ");
+            else {
+                if (model->players_pawns.size() == 1 || controller2->perform(win)) {
+                    state_order_state = STATE_STEP_ONE;
+                    if (win) {
+                        state_game = STATE_GAME_END;
+                    }
+                }
+            }
+            break;
+        case Game::STATE_GAME_END:
+            delete controller;
+            if (controller2)
+                delete controller2;
+            break;
+        default:
+            break;
         }
     }
 
@@ -109,7 +128,6 @@ public:
         delete viewPlaceDebug;
         delete viewCellsTarget;
         delete viewPointDebug;
-        //delete fnt;
     }
 };
 

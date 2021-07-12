@@ -5,7 +5,6 @@
 #include "gamemodel.h"
 #include "types.h"
 
-extern hgeFont* fnt;
 
 struct ViewPlaceDebug : public Observer {
     ViewPlaceDebug(GameModel* model) {
@@ -88,7 +87,7 @@ struct ViewBoard : public Observer {
         for (size_t i = 0; i < squars.size(); i++) {
             for (size_t j = 0; j < squars.size(); j++) {
                 renderQuad(squars[i][j]->leftTop, squars[i][j]->rightTop, squars[i][j]->rightBottom, squars[i][j]->leftBottom, 0xFFFFFFFF);
-                fnt->printf(squars[i][j]->leftTop.x, squars[i][j]->leftTop.y, HGETEXT_LEFT, " %i", squars[i][j]->n);               // TODO перенести во вьюшку
+                //fnt->printf(squars[i][j]->leftTop.x, squars[i][j]->leftTop.y, HGETEXT_LEFT, " %i", squars[i][j]->n);               // TODO перенести во вьюшку
             }
         }
     }
@@ -134,8 +133,7 @@ public:
     ViewCursor(GameModel* model) {
 
         spr_cursor = new hgeSprite(0, 487, 181, 16, 16);
-        hgeColorRGB cur_color(0, 1, 0, 1);
-        spr_cursor->SetColor(cur_color.GetHWColor());
+        spr_cursor->SetColor(0xFF00FF00);
 
 
         game = model;
@@ -150,9 +148,6 @@ public:
         hge->Gfx_RenderLine(game->board->arr_squars[i][j]->rightTop.x - border, game->board->arr_squars[i][j]->rightTop.y + border, game->board->arr_squars[i][j]->rightBottom.x - border, game->board->arr_squars[i][j]->rightBottom.y - border, color);
         hge->Gfx_RenderLine(game->board->arr_squars[i][j]->rightBottom.x - border, game->board->arr_squars[i][j]->rightBottom.y - border, game->board->arr_squars[i][j]->leftBottom.x + border, game->board->arr_squars[i][j]->leftBottom.y - border, color);
         hge->Gfx_RenderLine(game->board->arr_squars[i][j]->leftBottom.x + border, game->board->arr_squars[i][j]->leftBottom.y - border, game->board->arr_squars[i][j]->leftTop.x + border, game->board->arr_squars[i][j]->leftTop.y + border, color);
-        game->message.str = std::string(std::to_string(i) + " : " + std::to_string(j));
-        game->message.x = 450;
-        game->message.y = 450;
 
     }
 
@@ -167,13 +162,19 @@ public:
 };
 
 class ViewText : public Observer {
+    hgeFont* fnt;
 public:
     ViewText(GameModel* model) {
+        fnt = new hgeFont("G:\\projects\\work\\voroneg\\kvakvs-hge-4f237b4\\tutorials\\precompiled\\font2.fnt");
         game = model;
         game->addObserver(this);
+
     }
     virtual void update() {
-        fnt->printf(game->message.x, game->message.y, HGETEXT_LEFT, "Message:%f \n%s ", hge->Timer_GetTime(), game->message.str.c_str());
+        fnt->printf(game->message.x, game->message.y, HGETEXT_LEFT, "time passed:%f \n%s ", hge->Timer_GetTime(), game->message.str.c_str());
+    }
+    ~ViewText() {
+        delete fnt;
     }
     GameModel* game;
 };
@@ -186,6 +187,7 @@ public:
         spr_cell = new hgeSprite(0, 100, 100, 35, 35);
         spr_cell->SetColor(0x33000077);
     }
+    ~ViewPlaceEnemy() { delete spr_cell; }
 
     virtual void update() {
         for (auto player : game->players_pawns) {

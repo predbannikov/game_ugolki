@@ -2,12 +2,14 @@
 #define OBSERV_H
 #include <vector>
 
+/* Класс для View объектов, получает уведомления если необходимо перерисовать объект*/
 class Observer
 {
 public:
     virtual void update() = 0;
 };
 
+/* Класс для модели, где будут храниться все данные и алгоритмы */
 class Observable
 {
 public:

@@ -14,7 +14,6 @@ set( HGE_FONTEDIT_SRC
     observ.h
     observ.cpp
     main.cpp
-    main.h
     ) 
 
 set(CMAKE_CXX_STANDARD 17)

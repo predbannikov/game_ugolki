@@ -386,6 +386,22 @@ inline bool GameModel::getPawnPlaceOfNumber(const size_t number_pawn, const pawn
     return false;
 }
 
+/* Провека на местах ли пешки */
+bool GameModel::checkWin(const PawnsPlayer& player) {
+    bool check = true;
+    for (size_t i = 0; i < player.pawns.size(); i++) {
+        bool checkInside = false;
+        for (auto& cell : player.enemyPlace->cells) {
+            if (player.pawns[i].n == cell.n) {
+                checkInside = true;;
+            }
+        }
+        if (!checkInside)
+            check = false;
+    }
+    return check;
+}
+
 inline bool GameModel::checkEdge(Edge ed, std::vector<Edge>& vec_edge) {
     for (size_t i = 0; i < vec_edge.size(); i++)
         if (ed.a == vec_edge[i].a && ed.b == vec_edge[i].b)

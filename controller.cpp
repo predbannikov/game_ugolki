@@ -6,14 +6,17 @@ Controller::Controller(GameModel* model_, bool ai, Point startPoint, size_t widt
 {
     id_player++;
     player_pawns = model->createPawns(new PlayerPlace(model->board, startPoint, width_place_pawn, height_place_pawn), id_player);   // Создать фигуры 
-    model->arrangeFigures(player_pawns->pawns, id_player);             // Расставляем фигуры на доске
-    model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);
-    const Point& p = player_pawns->enemyPlace->most_interest_point;
-    width = player_pawns->enemyPlace->width_board;
+    model->arrangeFigures(player_pawns->pawns, id_player);              // Расставляем фигуры на доске
+    model->setSizePawn(WIDTH_PAWN, WIDTH_PAWN);                         // ширина длина пешки
+    width = player_pawns->enemyPlace->width_board;                      // TODO не нужны удалить окуратно 
     height = player_pawns->enemyPlace->height_board;
 
-    model->cell_debug = Cell(p.x, p.y, p.x + p.y * player_pawns->enemyPlace->width_board);
 
+    const Point& p = player_pawns->enemyPlace->most_interest_point;     // Наиболее интересная точка 
+    if(ai)
+        model->cell_debug = Cell(p.x, p.y, p.x + p.y * player_pawns->enemyPlace->width_board);      // Метка куда будет нацелен AI
+
+    // Создаём копию расположения игрока в памяти
     memory.resize(model->board->count_cells_row);
     for (size_t i = 0; i < memory.size(); i++) {
         memory[i].resize(model->board->count_cells_col);
@@ -63,7 +66,12 @@ bool Controller::upperStage(size_t& stage)
     return true;
 }
 
-bool Controller::perform()
+int Controller::movePawnAB(size_t a, size_t b)
+{
+    return model->move_pawn(a % COUNT_CELLS_ROW, a / COUNT_CELLS_ROW, b % COUNT_CELLS_ROW, b / COUNT_CELLS_ROW, *player_pawns);
+}
+
+bool Controller::perform(bool &win)
 {
     bool clickState = false;
     if (!AI) {
@@ -74,13 +82,15 @@ bool Controller::perform()
         }
     }
     else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
         /* Тут будем хратиться найденные пути в отсортированном порядке по длине, и обновляться после каждой вхождения в цикл */
         std::map<size_t, std::vector<size_t>> paths;
         std::map<size_t, std::vector<size_t>> tmpPaths;
         int smth_digit = 0;
         int n, m, * a;
-        n = 4;  // Набор
-        m = 4;  // Количество
+        n = 3;  // Набор
+        m = 3;  // Количество
         int h = n > m ? n : m; // размер массива а выбирается как max(n,m)
         a = new int[h];
         for (size_t i = 0; i < h; i++)
@@ -88,20 +98,35 @@ bool Controller::perform()
         std::string str;
         while (nextSet(a, n, m)) {
             for (int i = 0; i < m; i++) {
+                // Можно попробовать поиграться комбинаторным поиском путей из разного сочетания алгоритмов
                 combinatAlgo(tmpPaths, a);
                 paths.merge(tmpPaths);
                 tmpPaths.clear();
             }
         }
-        //model->printString(str);
-
+        delete [] a;
+        
+        int dist = 0;
         if (!paths.empty()) {
-            auto it = paths.begin()->second.begin();
-            int ret = model->move_pawn(*it % COUNT_CELLS_ROW, *it / COUNT_CELLS_ROW, *(it + 1) % COUNT_CELLS_ROW, *(it + 1) / COUNT_CELLS_ROW, *player_pawns);
+            auto itEnd = paths.end();
+            itEnd--;
+            auto itStart = paths.begin();
+            for (; itStart != itEnd; itStart++) {
+                itStart->second;
+                dist = player_pawns->distanceToMIP(*itStart->second.begin(), *(itStart->second.begin() + 1));
+                if (dist <= 0)
+                    break;
+            }
+            auto it = itStart->second.begin();
+            int ret = movePawnAB(*it, *(it+1));
             if (*it == 55)
                 std::cout << "";
             if (paths.begin()->first == 1)
                 player_pawns->pawns[ret].place = true;
+            if (model->checkWin(*player_pawns)) {
+                model->printString("WIN");
+                win = true;
+            }
         }
         clickState = true;
     }
@@ -132,19 +157,61 @@ void Controller::combinatAlgo(std::map<size_t, std::vector<size_t>>& paths, int 
     size_t fourth_algo = 4;
     size_t stage = 0;
 
+
+
     /* Если у нас нет доступных маршрутов продолжаем цикл поиска */
     while (paths.empty()) {
 
-        /* Получаем ячейки которые не заняты по отношению к точке MIP (наиболее интересующей точке, она вычисляется на этапе расстановки пешек)
-        barrier - указывает допускаемый отступ от самой точки (во все стороны)*/
-        if (first_algo == *(sequence + stage)) {
+        int dist = 0;   // Дистанция если положительная значит после хода мы удалились от главной цели
+
+        switch (*(sequence + stage))
+        {
+        case 1:
             inside = true;
+            /* Получаем ячейки которые не заняты по отношению к точке MIP (наиболее интересующей точке, она вычисляется на этапе расстановки пешек)
+            barrier - указывает допускаемый отступ от самой точки (во все стороны)
+            inside = 1 - поиск только в области для победы
+            inside = 0 - поиск только по отношению к точке без привязки к области для победы*/
             model->getCellsTarget(cellsTarget, *player_pawns, barrier, inside);
-        }
-        if (third_algo == *(sequence + stage)) {
+            break;
+        case 2:
             inside = false;
+            /* Получаем ячейки которые не заняты по отношению к точке MIP (наиболее интересующей точке, она вычисляется на этапе расстановки пешек)
+            barrier - указывает допускаемый отступ от самой точки (во все стороны)
+            inside = 1 - поиск только в области для победы
+            inside = 0 - поиск только по отношению к точке без привязки к области для победы*/
+
             model->getCellsTarget(cellsTarget, *player_pawns, barrier, inside);
+            break;
+        case 3:
+            if (!checkMem()) {
+                player_pawns->resetPawns();
+                saveMem();
+                if (upperStage(stage))
+                    break;
+                continue;
+            }
+
+            break;
+        case 4:
+            /* обнаружение обратного хода - бесполезный ход, можно поискать маршруты получше, */
+            if (!paths.empty()) {
+                do {
+                    auto it = paths.begin()->second.begin();
+                    dist = player_pawns->distanceToMIP(*it, *(it + 1));
+                    if (dist > 0) {
+                        paths.erase(paths.begin());
+                    }
+                } while (!paths.empty() && dist > 0);
+                if (upperStage(stage))
+                    break;
+            }
+
+            break;
+        default:
+            break;
         }
+
 
         /* Получаем доступные пути к интересующим точкам*/
         getPaths(paths, cellsTarget);
@@ -156,35 +223,13 @@ void Controller::combinatAlgo(std::map<size_t, std::vector<size_t>>& paths, int 
                 break;
         }
 
-        if (second_algo == *(sequence + stage)) {
-            if (!checkMem()) {
-                player_pawns->resetPawns();
-                saveMem();
-                if (upperStage(stage))
-                    break;
-                continue;
-            }
-        }
-        // TODO
-        /* обнаружение обратного хода - бесполезный ход, можно поискать маршруты получше, */
-        if (third_algo == *(sequence + stage)) {
-            int dist = 0;
-            if (!paths.empty()) {
-                do {
-                    auto it = paths.begin()->second.begin();
-                    dist = player_pawns->distanceToMIP(*it, *(it + 1));
-                    if (dist > 0) {
-                        std::cout << "stop";
-                        paths.erase(paths.begin());
-                    } 
-                } while (!paths.empty() && dist > 0);
-                if (upperStage(stage))
-                    break;
-            }
-        }
+
 
         // Если барьер стал больше ширины доски, значит нет доступных ходов, выходим из поиска
         if (barrier > player_pawns->playerPlace->width_board) {
+            player_pawns->resetPawns();
+            saveMem();
+
             if (upperStage(stage))
                 break;
         }
@@ -193,18 +238,24 @@ void Controller::combinatAlgo(std::map<size_t, std::vector<size_t>>& paths, int 
 
 inline bool Controller::checkMem() {
     bool check = true;
-    for (auto cell : player_pawns->enemyPlace->cells) {
-        if (memory[cell.y][cell.x]->fillType != model->board->arr_squars[cell.y][cell.x]->fillType) {
-            check = false;
+    for (auto &cell : player_pawns->enemyPlace->cells) {
+        int8_t type = model->board->arr_squars[cell.y][cell.x]->fillType;
+        if (player_pawns->side != type) {
+            if (memory[cell.y][cell.x]->fillType != type) {
+                check = false;
+            }
         }
     }
     return check;
 }
 
-/* Сохраним в памяти состояние области врага */
-
+/* Сохраним в памяти состояние области врага 
+сохранить нужно именно только пешки врага, запоминание своих пешек будут инициализировать ложные срабатывания*/
 inline void Controller::saveMem() {
-    for (auto cell : player_pawns->enemyPlace->cells) {
-        memory[cell.y][cell.x]->fillType = model->board->arr_squars[cell.y][cell.x]->fillType;
+    for (auto &cell : player_pawns->enemyPlace->cells) {
+        int8_t type = model->board->arr_squars[cell.y][cell.x]->fillType;
+        if (player_pawns->side != type) {
+            memory[cell.y][cell.x]->fillType = type;
+        }
     }
 }

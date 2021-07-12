@@ -22,6 +22,8 @@ public:
 
     GameModel(const size_t width_side = COUNT_CELLS_ROW);
 
+    ~GameModel() { delete board; }
+
     /* Создать фигуры
     player_place - это места пешек для старта игры (для одного игрока)
     */
@@ -30,14 +32,17 @@ public:
     /* Расставить фигуры на доске*/
     void arrangeFigures(const pawns_t& pawns, const int8_t plyer_side);
 
-
+    // Поиск путей пока не используется
     PointAB findPaths(pawns_t& pawns);
 
     /* Установить размер спрайта для пешки*/
     void setSizePawn(const float& w, const float& h);
 
+    //обновление курсора
     void moveCursore();
-    void printString(std::string str, float x = 450, float y = 350);;
+    //напечатать что нибудь
+    void printString(std::string str, float x = 450, float y = 350);
+    //для подсветки выделенной клетки
     void selectCell();
 
     /* Получить номера ячеек к которым искать пути и положить их в вектор*/
@@ -60,14 +65,21 @@ public:
     /* Для получения простого клика */
     bool clickCursor();
 
+    /* Провека на местах ли пешки */
+    bool checkWin(const PawnsPlayer& player);
 
 private:
+
+    // Получить состояние 'place' пешки
     bool getPawnPlaceOfNumber(const size_t number_pawn, const pawns_t& pawns);
 
+    /* Проверить доступность ребра */
     bool checkEdge(Edge ed, std::vector<Edge>& vec_edge);
 
+    /* Преобразовать номер в x y , под вопросом возможно стоит удалить*/
     void getIndexs(const size_t numberCell, size_t& x, size_t& y);
 
+    /* Расчитать доступные рёбра */
     void calcVecEdge(const pawns_t& pawns, std::vector<Edge>& edge);
 
 };
